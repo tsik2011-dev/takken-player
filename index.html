@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>宅建まとめ 読み上げ</title>
+<meta name="description" content="宅建スマートまとめレジュメの読み上げプレーヤー">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#F1F3F0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#11161B" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="宅建読み上げ">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Zen+Old+Mincho:wght@700&display=swap">
+<style>
+/* Layout: a single study column (index of 4 chapters / 42 points) above a fixed transport bar, like a registry ledger with a player docked at the foot. */
+:root{
+  --paper:#F1F3F0; --sheet:#FBFCFA; --ink:#17202A; --muted:#5A6570; --line:#D6DCD6;
+  --accent:#1E6A63; --accent-ink:#FFFFFF; --accent-soft:#DCEBE7; --seal:#B5412E; --seal-ink:#FFF7F2;
+  --hl:#FFF0B8; --hl-ink:#17202A; --shadow:0 -6px 24px rgba(23,32,42,.08);
+  --f-display:"Zen Old Mincho","Hiragino Mincho ProN","Yu Mincho",serif;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",sans-serif;
+  --f-num:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  --player-h:184px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#11161B; --sheet:#171E25; --ink:#E5EAE6; --muted:#98A3AA; --line:#28323B;
+  --accent:#62BDB2; --accent-ink:#0D1A18; --accent-soft:#1D3533; --seal:#E07A62; --seal-ink:#1B0F0B;
+  --hl:#4A4220; --hl-ink:#FFF6D6; --shadow:0 -6px 24px rgba(0,0,0,.4); color-scheme:dark }}
+:root[data-theme="dark"]{
+  --paper:#11161B; --sheet:#171E25; --ink:#E5EAE6; --muted:#98A3AA; --line:#28323B;
+  --accent:#62BDB2; --accent-ink:#0D1A18; --accent-soft:#1D3533; --seal:#E07A62; --seal-ink:#1B0F0B;
+  --hl:#4A4220; --hl-ink:#FFF6D6; --shadow:0 -6px 24px rgba(0,0,0,.4); color-scheme:dark }
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.7;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:0 calc(var(--player-h) + 24px + env(safe-area-inset-bottom,0px));-webkit-text-size-adjust:100%}
+.wrap{max-width:760px;margin:0 auto}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,select:focus-visible,input:focus-visible,.s:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums;letter-spacing:0}
+
+/* masthead */
+.mast{padding-block:28px 18px;display:grid;gap:14px}
+.eyebrow{font-size:12px;letter-spacing:.12em;color:var(--muted);font-weight:500}
+.mast h1{font-family:var(--f-display);font-weight:700;font-size:clamp(26px,6.4vw,38px);line-height:1.25;margin:0;text-wrap:balance;letter-spacing:.02em}
+.mast h1 small{display:block;font-family:var(--f-body);font-weight:500;font-size:.45em;letter-spacing:.08em;color:var(--accent);margin-top:6px}
+.stats{display:flex;flex-wrap:wrap;gap:6px 18px;color:var(--muted);font-size:13px}
+.stats b{color:var(--ink);font-weight:700}
+.cta{display:flex;flex-wrap:wrap;gap:10px}
+.btn{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:11px 18px;border:1px solid var(--line);background:var(--sheet);font-weight:500;font-size:14px;line-height:1.2}
+.btn svg{width:16px;height:16px;flex:none}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+.btn .sub{font-size:12px;opacity:.75;font-weight:400}
+.note{font-size:12.5px;color:var(--muted);line-height:1.65;border-left:2px solid var(--line);padding-left:10px;margin:0}
+
+/* chapters */
+.chapter{margin-top:26px}
+.ch-head{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding-block:10px;border-bottom:2px solid var(--ink)}
+.seal{width:44px;height:44px;display:grid;place-items:center;background:var(--seal);color:var(--seal-ink);font-family:var(--f-display);font-size:24px;border-radius:6px;box-shadow:inset 0 0 0 2px var(--seal),inset 0 0 0 4px var(--seal-ink);line-height:1}
+.ch-title{min-width:0}
+.ch-title .lab{font-size:12px;letter-spacing:.1em;color:var(--muted);display:block}
+.ch-title h2{font-family:var(--f-display);font-size:21px;margin:0;line-height:1.35}
+.ch-title .meta{font-size:12px;color:var(--muted)}
+.ch-play{padding:9px 14px;font-size:13px}
+.points{list-style:none;margin:0;padding:0}
+.pt{border-bottom:1px solid var(--line)}
+.pt-row{display:grid;grid-template-columns:1fr 40px;align-items:center;gap:8px;min-height:54px}
+.pt-open{display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:8px;border:0;background:transparent;padding:0;text-align:left;min-width:0;width:100%;border-radius:6px}
+.pt-no{font-family:var(--f-num);font-size:13px;color:var(--muted);text-align:left}
+.pt-name{min-width:0;font-weight:500;line-height:1.45;padding-block:8px}
+.pt-name .tag{display:inline-block;font-size:11px;font-weight:500;color:var(--seal);border:1px solid currentColor;border-radius:4px;padding:0 5px;margin-left:6px;vertical-align:1px;line-height:1.5}
+.pt-dur{font-size:12px;color:var(--muted)}
+.pt-play{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--sheet);display:grid;place-items:center;padding:0}
+.pt-play svg{width:14px;height:14px}
+.pt.playing .pt-no{color:var(--accent);font-weight:500}
+.pt.playing .pt-name{color:var(--accent)}
+.pt.playing .pt-play{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.pt-open:hover .pt-name{text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:4px}
+.eq{display:none;gap:2px;align-items:flex-end;height:12px;margin-right:4px;vertical-align:-1px}
+.eq i{display:block;width:3px;background:var(--accent);border-radius:1px;height:4px}
+.pt.playing.live .eq{display:inline-flex}
+.pt.playing.live .eq i{animation:eq 1s ease-in-out infinite}
+.pt.playing.live .eq i:nth-child(2){animation-delay:-.35s}.pt.playing.live .eq i:nth-child(3){animation-delay:-.7s}
+@keyframes eq{0%,100%{height:3px}50%{height:12px}}
+@media (prefers-reduced-motion:reduce){.pt.playing.live .eq i{animation:none;height:9px}}
+
+.pt-text{padding:4px 0 18px 44px;font-size:15.5px;line-height:1.95;max-width:66ch}
+.pt-text p{margin:0 0 .7em}
+.s{border-radius:4px;cursor:pointer;transition:background-color .2s}
+.s:hover{background:var(--accent-soft)}
+.s.now{background:var(--hl);color:var(--hl-ink);box-shadow:0 0 0 2px var(--hl)}
+.pt-text .hint{font-size:12px;color:var(--muted);margin-bottom:8px}
+
+/* player */
+.player{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--sheet);border-top:1px solid var(--line);box-shadow:var(--shadow);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-top:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px))}
+.pl{max-width:760px;margin:0 auto;display:grid;gap:6px}
+.now{display:flex;gap:10px;align-items:center;min-width:0}
+.now .mini-seal{width:26px;height:26px;flex:none;display:grid;place-items:center;border-radius:4px;background:var(--seal);color:var(--seal-ink);font-family:var(--f-display);font-size:15px;line-height:1}
+.now .mini-seal.idle{background:var(--line);color:var(--muted)}
+.now-txt{min-width:0;flex:1;line-height:1.35}
+.now-t{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.now-s{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pos{font-size:11.5px;color:var(--muted)}
+.bar{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;font-size:12px;color:var(--muted)}
+#seek{width:100%;accent-color:var(--accent);height:22px;margin:0}
+.ctrls{display:flex;align-items:center;justify-content:center;gap:clamp(4px,2.6vw,18px)}
+.ic{width:44px;height:44px;border:0;background:transparent;border-radius:50%;display:grid;place-items:center;padding:0;position:relative}
+.ic svg{width:24px;height:24px}
+.ic .lbl{position:absolute;font-size:9px;font-family:var(--f-num);bottom:12px}
+.ic:hover{background:var(--accent-soft)}
+.ic.big{width:56px;height:56px;background:var(--accent);color:var(--accent-ink)}
+.ic.big svg{width:26px;height:26px}
+.ic.big:hover{background:var(--accent);filter:brightness(1.08)}
+.opts{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+.seg button{border:0;background:transparent;padding:5px 11px;font-size:12px;font-weight:500;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.chip{border:1px solid var(--line);background:transparent;border-radius:999px;padding:5px 11px;font-size:12px;font-weight:500;color:var(--muted);display:inline-flex;gap:5px;align-items:center}
+.chip[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.chip svg{width:13px;height:13px}
+
+/* settings sheet */
+.sheet{position:fixed;inset:0;z-index:30;background:rgba(10,14,18,.45);display:flex;align-items:flex-end;justify-content:center}
+.sheet-in{background:var(--sheet);width:100%;max-width:560px;border-radius:16px 16px 0 0;max-height:86%;overflow:auto;
+  padding:18px max(18px,env(safe-area-inset-right,0px)) calc(22px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px));display:grid;gap:18px}
+.sheet h3{margin:0;font-family:var(--f-display);font-size:19px}
+.field{display:grid;gap:8px}
+.field > .k{font-size:12px;letter-spacing:.08em;color:var(--muted);font-weight:500}
+.field .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.field select{font:inherit;font-size:14px;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--paper);color:var(--ink);max-width:100%}
+.field p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.6}
+.meter{height:6px;background:var(--line);border-radius:3px;overflow:hidden;flex:1;min-width:120px}
+.meter i{display:block;height:100%;width:0;background:var(--accent)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--player-h) + 18px + env(safe-area-inset-bottom,0px));z-index:40;background:var(--ink);color:var(--paper);padding:9px 14px;border-radius:10px;font-size:13px;max-width:min(92vw,520px);box-shadow:0 8px 24px rgba(0,0,0,.2)}
+footer{margin-top:28px;font-size:12px;color:var(--muted);line-height:1.7}
+@media (max-width:420px){ .pt-open{grid-template-columns:34px 1fr auto} .pt-text{padding-left:0} .seg button{padding:5px 9px} }
+html{padding-top:env(safe-area-inset-top,0px)}
+body{margin:0}
+/* unlock screen */
+.boot{min-height:70vh;display:grid;place-items:center;color:var(--muted);font-size:14px;text-align:center;padding-block:40px}
+.lock{min-height:calc(100vh - env(safe-area-inset-top,0px));display:grid;place-items:center;padding-block:32px}
+.lock-in{width:100%;max-width:420px;display:grid;gap:16px}
+.lock .seal{width:64px;height:64px;font-size:34px}
+.lock h1{font-family:var(--f-display);font-size:28px;line-height:1.3;margin:0}
+.lock p{margin:0;color:var(--muted);font-size:13.5px;line-height:1.75}
+.lock form{display:grid;gap:10px}
+.lock label{font-size:12px;letter-spacing:.08em;color:var(--muted);font-weight:500}
+.lock input{font-family:var(--f-num);font-size:20px;letter-spacing:.06em;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--sheet);color:var(--ink);width:100%}
+.lock input:focus{outline:2px solid var(--accent);outline-offset:1px}
+.lock .btn{justify-content:center;padding:13px 18px;font-size:15px}
+.err{color:var(--seal);font-size:13px;min-height:1.4em;margin:0}
+/* install + offline panel */
+.panel{display:grid;gap:10px;border:1px solid var(--line);background:var(--sheet);border-radius:12px;padding:12px 14px}
+.panel .row{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.panel .k{font-size:12px;letter-spacing:.08em;color:var(--muted);font-weight:500}
+.panel p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.65}
+.panel .meter{max-width:220px}
+.ios-steps{margin:0;padding-left:1.3em;font-size:13px;line-height:1.8}
+.ios-steps b{font-weight:700}
+.pt.saved .pt-dur::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:6px;vertical-align:2px}
+.loading .ic.big{opacity:.75}
+</style>
+</head>
+<body>
+<div id="boot" class="boot"><div>読み込み中…</div></div>
+
+<section id="lock" class="lock wrap" hidden>
+  <div class="lock-in">
+    <div class="seal" aria-hidden="true">宅</div>
+    <h1>宅建まとめ<br>読み上げ</h1>
+    <p>レジュメの本文と音声は暗号化してあります。合言葉を入れると、この端末で開けるようになります。入力は最初の1回だけです。</p>
+    <form id="lockForm" autocomplete="off">
+      <label for="pass">合言葉</label>
+      <input id="pass" name="pass" type="text" inputmode="latin" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="xxxx-xxxx-xxxx-xxxx" required>
+      <p class="err" id="passErr" role="alert"></p>
+      <button class="btn primary" id="passBtn" type="submit">開く</button>
+    </form>
+    <p>合言葉は、このアプリを作ったときの Claude とのチャットに書いてあります。</p>
+  </div>
+</section>
+
+<div id="app" hidden>
+<div class="wrap">
+  <header class="mast">
+    <div class="eyebrow">2026年 宅地建物取引士講座</div>
+    <h1>スマートまとめレジュメ<small>読み上げプレーヤー</small></h1>
+    <div class="stats" id="stats"></div>
+    <div class="cta">
+      <button class="btn primary" id="playAll" type="button"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z"/></svg>全体を通して再生</button>
+      <button class="btn" id="resume" type="button" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5"/></svg><span>続きから<span class="sub" id="resumeSub"></span></span></button>
+    </div>
+    <div class="panel" id="installPanel" hidden>
+      <span class="k">ホーム画面にインストール</span>
+      <div class="row" id="installAndroid" hidden><button class="btn primary" id="bInstall" type="button">アプリとしてインストール</button></div>
+      <ol class="ios-steps" id="installIos" hidden>
+        <li>画面下の<b>共有ボタン</b>（□に↑）をタップ</li>
+        <li><b>ホーム画面に追加</b>を選ぶ</li>
+        <li><b>Webアプリとして開く</b>がオンのまま<b>追加</b></li>
+        <li>ホーム画面のアイコンから開き、合言葉をもう一度入力</li>
+      </ol>
+      <p id="installOther" hidden>ブラウザのメニューから「ホーム画面に追加」または「アプリをインストール」を選んでください。LINE や Claude アプリの中で開いている場合は、Safari か Chrome で開き直してください。</p>
+    </div>
+    <div class="panel" id="offPanel">
+      <span class="k">オフライン再生</span>
+      <div class="row"><div class="meter" aria-hidden="true"><i id="saveBar"></i></div><span class="pos num" id="saveInfo"></span></div>
+      <div class="row"><button class="btn" id="bSave" type="button">残りをすべてダウンロード</button></div>
+      <p id="saveNote">一度再生した項目は自動で端末に保存されます。全部保存しておくと、電波がない場所でも途切れません（Wi-Fi 推奨）。</p>
+    </div>
+  </header>
+  <main id="list"></main>
+  <footer>音声は合成音声です（HTS voice “Mei” / Open JTalk）。統計の数字は最新の「法改正レジュメ」で確認してください。</footer>
+</div>
+
+<div class="player" id="player">
+  <div class="pl">
+    <div class="now">
+      <div class="mini-seal idle" id="nowSeal">・</div>
+      <div class="now-txt">
+        <div class="now-t" id="nowT">再生する項目を選んでください</div>
+        <div class="now-s" id="nowS">全体・章・ポイントごとに連続再生できます</div>
+      </div>
+      <div class="pos num" id="nowPos"></div>
+    </div>
+    <div class="bar">
+      <span class="num" id="tCur">0:00</span>
+      <input type="range" id="seek" min="0" max="100" step="0.1" value="0" aria-label="再生位置">
+      <span class="num" id="tDur">0:00</span>
+    </div>
+    <div class="ctrls">
+      <button class="ic" id="bPrev" type="button" aria-label="前のポイント"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2.2v14H6zM19 5v14L8.8 12z"/></svg></button>
+      <button class="ic" id="bBack" type="button" aria-label="15秒戻る"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4v4h4"/></svg><span class="lbl">15</span></button>
+      <button class="ic big" id="bPlay" type="button" aria-label="再生"><svg id="icPlay" viewBox="0 0 24 24" fill="currentColor"><path d="M7.5 4.5v15l12-7.5z"/></svg><svg id="icPause" viewBox="0 0 24 24" fill="currentColor" hidden><path d="M6.5 4.5h4v15h-4zM13.5 4.5h4v15h-4z"/></svg></button>
+      <button class="ic" id="bFwd" type="button" aria-label="15秒進む"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4v4h-4"/></svg><span class="lbl">15</span></button>
+      <button class="ic" id="bNext" type="button" aria-label="次のポイント"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.8 5H18v14h-2.2zM5 5v14l10.2-7z"/></svg></button>
+    </div>
+    <div class="opts">
+      <div class="seg" role="group" aria-label="連続再生の範囲">
+        <button type="button" data-scope="all" aria-pressed="true">全体</button>
+        <button type="button" data-scope="chapter" aria-pressed="false">この章</button>
+        <button type="button" data-scope="point" aria-pressed="false">この項目</button>
+      </div>
+      <button class="chip" id="bRepeat" type="button" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 11V9a3 3 0 0 1 3-3h12l-3-3M20 13v2a3 3 0 0 1-3 3H5l3 3"/></svg>繰り返し</button>
+      <button class="chip" id="bSpeed" type="button" aria-label="再生速度">1.0×</button>
+      <button class="chip" id="bMore" type="button" aria-label="設定"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>設定</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-in" role="dialog" aria-modal="true" aria-labelledby="sheetH">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><h3 id="sheetH">再生の設定</h3><button class="chip" id="sheetClose" type="button">閉じる</button></div>
+    <div class="field"><span class="k">再生速度</span><div class="row seg" id="speedSeg" role="group" aria-label="再生速度"></div></div>
+    <div class="field"><span class="k">スリープタイマー</span>
+      <div class="row"><select id="sleepSel"><option value="0">オフ</option><option value="15">15分後に停止</option><option value="30">30分後に停止</option><option value="45">45分後に停止</option><option value="60">60分後に停止</option><option value="pt">いまの項目が終わったら停止</option></select><span class="pos" id="sleepInfo"></span></div></div>
+    <div class="field"><span class="k">本文の表示</span>
+      <div class="row"><button class="chip" id="bFollow" type="button" aria-pressed="true">読んでいる文に自動でスクロール</button></div></div>
+    <div class="field"><span class="k">読み上げの声</span>
+      <div class="row seg" role="group" aria-label="読み上げの声"><button type="button" data-mode="audio" aria-pressed="true">収録音声</button><button type="button" data-mode="speech" aria-pressed="false">端末の音声</button></div>
+      <p>収録音声はバックグラウンド・画面ロック中も再生が続きます。端末の音声は端末に入っている声で読み上げますが、画面を表示している間だけ動きます。</p>
+      <div class="row" id="voiceRow" hidden><select id="voiceSel" aria-label="端末の声"></select></div></div>
+    <div class="field"><span class="k">音が出ないとき</span>
+      <p>再生ボタンを押しても音が出ないときは、いったん一時停止してからもう一度再生してください。それでも鳴らない場合は、Safari（Android は Chrome）でこのページを開くと再生できます。</p></div>
+    <div class="field"><span class="k">この端末のデータ</span>
+      <div class="row"><button class="chip" id="bForget" type="button">合言葉と保存した音声を削除</button></div>
+      <p id="forgetNote">削除すると、次に開くときに合言葉が必要になります。</p></div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden></div>
+</div>
+
+<script>
+(function(){
+'use strict';
+const $=s=>document.querySelector(s);
+const SEAL={1:'民',2:'宅',3:'法',4:'他'};
+const SPEEDS=[0.8,1,1.2,1.4,1.6,1.8,2];
+const PACK='tkp-pack-v1';
+const LS_PREF='tkp-prefs-v1', LS_POS='tkp-pos-v1', LS_PASS='tkp-pass-v1';
+const SILENCE='silence.mp3';
+const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const STANDALONE=matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+const UA=navigator.userAgent;
+const IOS=/iP(hone|ad|od)/.test(UA)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const INAPP=/Line\/|FBAN|FBAV|Instagram|Claude/i.test(UA);
+
+function lsGet(k){ try{ return JSON.parse(localStorage.getItem(k)||'null'); }catch(e){ return null; } }
+function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+function lsDel(k){ try{ localStorage.removeItem(k); }catch(e){} }
+const fmt=s=>{ if(!isFinite(s)||s<0)s=0; s=Math.floor(s); const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60; return h?`${h}:${String(m).padStart(2,'0')}:${String(x).padStart(2,'0')}`:`${m}:${String(x).padStart(2,'0')}`; };
+const fmtJ=s=>{ const m=Math.round(s/60); return m>=60?`${Math.floor(m/60)}時間${m%60}分`:`${m}分`; };
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let toastT=0; function toast(m){ const el=$('#toast'); el.textContent=m; el.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>el.hidden=true,2800); }
+
+if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+
+/* ---------- key storage ---------- */
+function idb(){ return new Promise((res,rej)=>{ const r=indexedDB.open('tkp',1); r.onupgradeneeded=()=>r.result.createObjectStore('kv'); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+async function kv(mode,k,v){ try{ const db=await idb(); return await new Promise((res,rej)=>{ const tx=db.transaction('kv',mode==='get'?'readonly':'readwrite'); const s=tx.objectStore('kv');
+  const q=mode==='get'?s.get(k):mode==='set'?s.put(v,k):s.delete(k); tx.oncomplete=()=>res(q.result); tx.onerror=()=>rej(tx.error); }); }catch(e){ return mode==='set'?false:undefined; } }
+
+/* ---------- crypto ---------- */
+let META=null, KEY=null;
+const b64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+const cleanPass=p=>p.normalize('NFKC').replace(/[\s\-－ー―‐_]/g,'').toLowerCase();
+async function deriveKey(pass){
+  const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(cleanPass(pass)),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt:b64(META.salt),iterations:META.iter,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['decrypt']);
+}
+async function decrypt(buf,key){ const u=new Uint8Array(buf); return crypto.subtle.decrypt({name:'AES-GCM',iv:u.slice(0,12)},key||KEY,u.slice(12)); }
+async function loadData(key){
+  const r=await fetch('pack/data.bin'); if(!r.ok) throw new Error('net');
+  const buf=await r.arrayBuffer(); let plain;
+  try{ plain=await decrypt(buf,key); }catch(e){ const er=new Error('badpass'); er.badpass=true; throw er; }
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+async function rememberKey(key,pass){ const ok=await kv('set','key',key); if(!ok&&pass) lsSet(LS_PASS,pass);
+  try{ const c=await caches.open(PACK); await Promise.all(['pack/meta.json','pack/data.bin'].map(u=>c.add(u))); }catch(e){}
+  try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist(); }catch(e){} }
+
+/* ---------- boot ---------- */
+async function boot(){
+  try{ const r=await fetch('pack/meta.json',{cache:'no-cache'}); if(!r.ok) throw 0; META=await r.json(); }
+  catch(e){ $('#boot').innerHTML='<div>最初の起動にはインターネット接続が必要です。<br>接続してから開き直してください。</div>'; return; }
+  let key=await kv('get','key'); let data=null;
+  if(!key){ const p=lsGet(LS_PASS); if(p){ try{ key=await deriveKey(p); }catch(e){} } }
+  if(key){ try{ data=await loadData(key); KEY=key; }catch(e){ if(!e.badpass){ $('#boot').innerHTML='<div>データを読み込めませんでした。<br>通信状態を確認して、開き直してください。</div>'; return; } key=null; } }
+  if(!data) data=await unlockFlow();
+  $('#boot').hidden=true; $('#lock').hidden=true; $('#app').hidden=false;
+  start(data);
+}
+function unlockFlow(){
+  return new Promise(resolve=>{
+    $('#boot').hidden=true; $('#lock').hidden=false;
+    const form=$('#lockForm'), inp=$('#pass'), err=$('#passErr'), btn=$('#passBtn');
+    const m=location.hash.match(/^#k=([\w-]+)$/); if(m){ inp.value=m[1]; history.replaceState(null,'',location.pathname+location.search); }
+    async function tryOpen(){
+      const pass=inp.value; if(!cleanPass(pass)){ err.textContent='合言葉を入力してください'; return; }
+      err.textContent=''; btn.disabled=true; btn.textContent='確認しています…';
+      try{ const key=await deriveKey(pass); const data=await loadData(key); KEY=key; await rememberKey(key,pass); resolve(data); }
+      catch(e){ err.textContent=e.badpass?'合言葉が違います。もう一度確かめてください':'通信できませんでした。接続を確認してください'; }
+      btn.disabled=false; btn.textContent='開く';
+    }
+    form.addEventListener('submit',e=>{ e.preventDefault(); tryOpen(); });
+    if(m) tryOpen(); else setTimeout(()=>{ try{ inp.focus(); }catch(e){} },300);
+  });
+}
+
+/* ---------- player ---------- */
+function start(PAYLOAD){
+const DATA=PAYLOAD.chapters, FIXES=PAYLOAD.fixes;
+const tracks=[];
+DATA.forEach((ch,ci)=>ch.points.forEach((p,pi)=>{
+  const sents=[]; p.paras.forEach((para,ai)=>para.forEach(s=>sents.push({t:s.t,s:s.s,a:ai})));
+  tracks.push(Object.assign({},p,{ci,pi,ch,sents,idx:tracks.length,exempt:ch.no===4&&p.no>=4,url:'pack/'+p.id+'.bin'}));
+}));
+const byId=Object.fromEntries(tracks.map(t=>[t.id,t]));
+const sizeOf=Object.fromEntries((META.files||[]).map(f=>[f.id,f.size]));
+
+const st=Object.assign({scope:'all',repeat:false,speed:1,follow:true,mode:'audio',voice:''},lsGet(LS_PREF)||{});
+st.cur=-1; st.sent=-1; st.playing=false; st.sleepAt=0; st.sleepPt=false;
+const savePrefs=()=>lsSet(LS_PREF,{scope:st.scope,repeat:st.repeat,speed:st.speed,follow:st.follow,mode:st.mode,voice:st.voice});
+
+/* list */
+const totalDur=tracks.reduce((a,t)=>a+t.dur,0);
+$('#stats').innerHTML=`<span><b>${DATA.length}</b> 章</span><span><b>${tracks.length}</b> ポイント</span><span>全体 <b>${fmtJ(totalDur)}</b>（1.0倍速）</span>`;
+const list=$('#list');
+const playSvg='<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.5 4.5v15l12-7.5z"/></svg>';
+const pauseSvg='<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6.5 4.5h4v15h-4zM13.5 4.5h4v15h-4z"/></svg>';
+DATA.forEach((ch,ci)=>{
+  const ts=tracks.filter(t=>t.ci===ci); const d=ts.reduce((a,t)=>a+t.dur,0);
+  const sec=document.createElement('section'); sec.className='chapter'; sec.id='ch'+ch.no;
+  sec.innerHTML=`<div class="ch-head"><div class="seal" aria-hidden="true">${SEAL[ch.no]}</div>
+    <div class="ch-title"><span class="lab">${esc(ch.label)}</span><h2>${esc(ch.title)}</h2><span class="meta">${ts.length}ポイント・${fmtJ(d)}</span></div>
+    <button class="btn ch-play" type="button" data-chplay="${ci}">${playSvg}この章を再生</button></div>
+    <ol class="points">${ts.map(t=>`<li class="pt" id="${t.id}" data-i="${t.idx}">
+      <div class="pt-row"><button class="pt-open" type="button" data-open="${t.idx}" aria-expanded="false" aria-controls="tx-${t.id}">
+        <span class="pt-no">P${t.no}</span><span class="pt-name"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>${esc(t.title)}${t.exempt?'<span class="tag">講習修了者は免除</span>':''}</span><span class="pt-dur num">${fmt(t.dur)}</span></button>
+        <button class="pt-play" type="button" data-play="${t.idx}" aria-label="${esc(t.title)}を再生">${playSvg}</button></div>
+      <div class="pt-text" id="tx-${t.id}" hidden></div></li>`).join('')}</ol>`;
+  list.appendChild(sec);
+});
+const liOf=i=>document.getElementById(tracks[i].id);
+const textOf=i=>document.getElementById('tx-'+tracks[i].id);
+function renderText(i){
+  const box=textOf(i); if(box.dataset.r) return box; const t=tracks[i];
+  let k=0; box.innerHTML='<div class="hint">文をタップすると、そこから再生します。</div>'+t.paras.map(p=>'<p>'+p.map(s=>`<span class="s" tabindex="0" data-k="${k++}">${esc(s.s)}</span>`).join('')+'</p>').join('');
+  box.dataset.r='1'; return box;
+}
+const autoOpened=new Set();
+function setOpen(i,open,auto){
+  const box=open?renderText(i):textOf(i); box.hidden=!open;
+  liOf(i).querySelector('.pt-open').setAttribute('aria-expanded',String(open));
+  if(open&&auto) autoOpened.add(i); else autoOpened.delete(i);
+}
+
+/* ---------- audio engine ---------- */
+let audio=null, srcFor=null, pendingSeek=0, lastTime=0, loadTok=0, needFresh=false;
+const blobs=new Map(), inflight=new Map();
+const AEV={};
+function makeAudio(){
+  if(audio){ try{ audio.pause(); audio.removeAttribute('src'); audio.load(); }catch(e){} audio.remove(); }
+  audio=document.createElement('audio'); audio.preload='auto'; audio.setAttribute('playsinline',''); audio.setAttribute('webkit-playsinline','');
+  document.body.appendChild(audio); for(const ev in AEV) audio.addEventListener(ev,AEV[ev]); srcFor=null; applyRate(); return audio;
+}
+const real=e=>e.target===audio&&srcFor!=null;
+function getBlobUrl(t){
+  if(blobs.has(t.id)) return Promise.resolve(blobs.get(t.id));
+  if(inflight.has(t.id)) return inflight.get(t.id);
+  const p=(async()=>{ const r=await fetch(t.url); if(!r.ok) throw new Error('HTTP '+r.status);
+    const plain=await decrypt(await r.arrayBuffer());
+    const u=URL.createObjectURL(new Blob([plain],{type:'audio/mpeg'})); blobs.set(t.id,u); setTimeout(()=>checkSaved(t),1200); return u; })();
+  inflight.set(t.id,p); p.then(()=>inflight.delete(t.id),()=>inflight.delete(t.id)); return p;
+}
+function prune(keep){ for(const [id,u] of blobs){ if(!keep.has(id)&&srcFor!==id){ URL.revokeObjectURL(u); blobs.delete(id); } } }
+function prefetch(){
+  if(st.cur<0) return; const keep=new Set([tracks[st.cur].id]);
+  const n=nextIndex(st.cur); if(n!=null){ keep.add(tracks[n].id); getBlobUrl(tracks[n]).catch(()=>{}); }
+  prune(keep);
+}
+function nextIndex(i){
+  const t=tracks[i]; if(!t) return null;
+  if(st.scope==='point') return st.repeat?i:null;
+  if(st.scope==='chapter'){ const n=tracks[i+1]; if(n&&n.ci===t.ci) return i+1; return st.repeat?tracks.findIndex(x=>x.ci===t.ci):null; }
+  if(i+1<tracks.length) return i+1; return st.repeat?0:null;
+}
+function applyRate(){ if(!audio) return; audio.defaultPlaybackRate=st.speed; audio.playbackRate=st.speed; try{ audio.preservesPitch=true; }catch(e){} }
+function setLoading(on){ document.body.classList.toggle('loading',on); }
+function setSrc(u,t,t0){ audio.src=u; srcFor=t.id; pendingSeek=t0||0; lastTime=t0||0; applyRate(); }
+let wdT=0;
+function doPlay(silent){
+  const p=audio.play();
+  if(p&&p.catch) p.catch(e=>{ if(silent||(e&&e.name==='AbortError')) return; setPlayingUI(false); if(e&&e.name==='NotAllowedError'){ needFresh=true; toast('再生ボタンをもう一度押してください'); } });
+  if(!silent){ clearTimeout(wdT); const a=audio, c0=audio.currentTime;
+    wdT=setTimeout(()=>{ if(a!==audio||a.paused||srcFor==null) return; if(a.currentTime-c0<0.15&&a.readyState>=2){ needFresh=true; a.pause(); toast('音が出ない場合は、もう一度再生ボタンを押してください'); } },3500); }
+}
+function playTrack(i,t0,auto){
+  if(t0==null) t0=0; if(auto==null) auto=true;
+  const t=tracks[i]; if(!t) return;
+  const prev=st.cur, changed=prev!==i; st.cur=i; if(changed) st.sent=-1;
+  if(st.mode==='speech'){ trackChanged(prev,changed); speechStart(i,sentAt(t,t0),true); return; }
+  if(needFresh||!audio){ needFresh=false; makeAudio(); }
+  const tok=++loadTok; const ready=blobs.get(t.id);
+  if(ready){ if(srcFor!==t.id) setSrc(ready,t,t0); else seekTo(t0); if(auto) doPlay(false); }
+  else {
+    if(auto){ audio.src=SILENCE; srcFor=null; doPlay(true); }
+    setLoading(true);
+    getBlobUrl(t).then(u=>{ if(tok!==loadTok) return; setLoading(false); setSrc(u,t,t0); if(auto) doPlay(false); })
+      .catch(()=>{ if(tok!==loadTok) return; setLoading(false); try{ audio.pause(); }catch(e){} setPlayingUI(false);
+        toast(navigator.onLine===false?'オフラインです。この項目はまだ端末に保存されていません':'音声を読み込めませんでした。通信状態を確認してください'); });
+  }
+  trackChanged(prev,changed); setMeta(t); prefetch(); savePos(true);
+}
+function seekTo(x){ lastTime=x; if(srcFor==null||audio.readyState<1){ pendingSeek=x; return; } try{ audio.currentTime=x; }catch(e){ pendingSeek=x; } posState(); }
+function trackChanged(prev,changed){
+  if(changed&&prev>=0){ liOf(prev).classList.remove('playing','live'); liOf(prev).querySelector('.pt-play').innerHTML=playSvg; if(autoOpened.has(prev)) setOpen(prev,false); const old=textOf(prev).querySelector('.s.now'); if(old) old.classList.remove('now'); }
+  const li=liOf(st.cur); li.classList.add('playing');
+  if(textOf(st.cur).hidden) setOpen(st.cur,true,true);
+  updateNow(); if(changed&&st.follow&&!userActive()) scrollToEl(li,'start');
+}
+AEV.loadedmetadata=e=>{ if(!real(e)) return; applyRate(); const x=pendingSeek; pendingSeek=0; if(x>0){ try{ audio.currentTime=x; }catch(er){} } updateProgress(); };
+AEV.play=e=>{ if(!real(e)) return; applyRate(); setPlayingUI(true); };
+AEV.playing=e=>{ if(!real(e)) return; setPlayingUI(true); };
+AEV.pause=e=>{ if(!real(e)||st.mode!=='audio') return; setPlayingUI(false); savePos(true); };
+AEV.ended=e=>{
+  if(!real(e)||st.mode!=='audio') return;
+  if(st.sleepPt){ st.sleepPt=false; $('#sleepSel').value='0'; updateSleepInfo(); setPlayingUI(false); toast('スリープタイマーで停止しました'); return; }
+  const n=nextIndex(st.cur);
+  if(n==null){ setPlayingUI(false); savePos(true); toast(st.scope==='point'?'この項目の再生が終わりました':st.scope==='chapter'?'この章の再生が終わりました':'最後まで再生しました'); return; }
+  playTrack(n,0,true);
+};
+AEV.error=e=>{ if(!real(e)) return; const t=tracks[st.cur]; blobs.delete(t.id); srcFor=null; setPlayingUI(false); toast('音声を再生できませんでした。もう一度再生ボタンを押してください'); };
+let lastSave=0, lastPS=0;
+AEV.timeupdate=e=>{
+  if(!real(e)||st.mode!=='audio') return; const t=tracks[st.cur]; if(!t) return;
+  lastTime=audio.currentTime; updateProgress(); setSent(sentAt(t,lastTime)); savePos(false); checkSleep();
+  const now=Date.now(); if(now-lastPS>1500){ lastPS=now; posState(); }
+};
+AEV.ratechange=e=>{ if(real(e)) posState(); };
+makeAudio();
+
+function sentAt(t,x){ const a=t.sents; let lo=0,hi=a.length-1,r=-1; while(lo<=hi){ const m=(lo+hi)>>1; if(a[m].t<=x+0.08){ r=m; lo=m+1; } else hi=m-1; } return r; }
+
+/* ---------- device speech engine ---------- */
+const synth=window.speechSynthesis; let voices=[], spk={tok:0,k:0,on:false,head:false};
+function norm(s){ for(const [a,b] of FIXES) s=s.split(a).join(b);
+  s=s.replace(/([いたる])方(?=[がはをに、])/g,'$1ほう');
+  return s.replace(/(^|[^A-Za-z])([A-D]{1,2})(?![A-Za-z])/g,(m,p,l)=>p+[...l].map(c=>({A:'エー',B:'ビー',C:'シー',D:'ディー'})[c]).join('')); }
+function loadVoices(){ if(!synth) return; voices=synth.getVoices().filter(v=>/^ja/i.test(v.lang)); const sel=$('#voiceSel');
+  sel.innerHTML=voices.length?voices.map(v=>`<option value="${esc(v.name)}"${v.name===st.voice?' selected':''}>${esc(v.name)}</option>`).join(''):'<option value="">日本語の声が見つかりません</option>'; }
+if(synth){ loadVoices(); if(synth.addEventListener) synth.addEventListener('voiceschanged',loadVoices); }
+function speechStart(i,k,withHead){
+  if(!synth){ toast('この端末では端末の音声を使えません'); return; }
+  try{ audio.pause(); }catch(e){} synth.cancel(); spk={tok:spk.tok+1,k:Math.max(k,0),on:true,head:!!withHead&&k<=0};
+  setPlayingUI(true); speakStep(spk.tok);
+}
+function speakStep(tok){
+  if(tok!==spk.tok) return; let t=tracks[st.cur];
+  if(spk.k>=t.sents.length){
+    if(st.sleepPt){ st.sleepPt=false; $('#sleepSel').value='0'; updateSleepInfo(); speechStop(); return; }
+    const n=nextIndex(st.cur); if(n==null){ speechStop(); toast('再生が終わりました'); return; }
+    const prev=st.cur; st.cur=n; st.sent=-1; trackChanged(prev,prev!==n); spk.k=0; spk.head=true; t=tracks[n];
+  }
+  let text;
+  if(spk.head){ text=(t.pi===0?`${t.ch.label}、${t.ch.title}。`:'')+`ポイント${t.no}、${t.title}。`; }
+  else { text=t.sents[spk.k].s; setSent(spk.k); updateProgress(t.sents[spk.k].t); }
+  const u=new SpeechSynthesisUtterance(norm(text)); u.lang='ja-JP';
+  const v=voices.find(x=>x.name===st.voice)||voices[0]; if(v) u.voice=v; u.rate=Math.min(2,Math.max(.5,st.speed));
+  const done=()=>{ if(tok!==spk.tok) return; if(spk.head) spk.head=false; else spk.k++; checkSleep(); savePos(false); speakStep(tok); };
+  u.onend=done; u.onerror=e=>{ if(e&&(e.error==='interrupted'||e.error==='canceled')) return; done(); };
+  synth.speak(u);
+}
+function speechStop(){ spk.tok++; spk.on=false; if(synth) synth.cancel(); setPlayingUI(false); savePos(true); }
+
+/* ---------- transport ---------- */
+function isPlaying(){ return st.mode==='audio'?(!audio.paused&&srcFor!=null)||loadTok&&document.body.classList.contains('loading'):spk.on; }
+function toggle(){
+  if(st.cur<0){ const p=lsGet(LS_POS); if(p&&byId[p.id]) playTrack(byId[p.id].idx,p.t); else playTrack(0,0); return; }
+  if(st.mode==='audio'){
+    if(audio.paused||srcFor==null){ if(needFresh||srcFor!==tracks[st.cur].id){ playTrack(st.cur,lastTime,true); return; } applyRate(); doPlay(false); }
+    else audio.pause();
+  } else { if(spk.on) speechStop(); else speechStart(st.cur,Math.max(st.sent,0),st.sent<0); }
+}
+function pause(){ if(st.mode==='audio'){ loadTok++; setLoading(false); try{ audio.pause(); }catch(e){} setPlayingUI(false); } else speechStop(); }
+function skip(d){ if(st.cur<0) return;
+  if(st.mode==='audio'){ const dur=isFinite(audio.duration)&&audio.duration>0?audio.duration:tracks[st.cur].dur; seekTo(Math.max(0,Math.min(dur-0.5,(srcFor?audio.currentTime:lastTime)+d))); updateProgress(); }
+  else { const t=tracks[st.cur]; const cur=t.sents[Math.max(st.sent,0)]; const k=sentAt(t,(cur?cur.t:0)+d); speechStart(st.cur,Math.max(0,k),false); } }
+function next(){ if(st.cur<0){ playTrack(0); return; } if(st.cur+1<tracks.length) playTrack(st.cur+1,0,true); }
+function prev(){ if(st.cur<0) return; const tcur=st.mode==='audio'?(srcFor?audio.currentTime:0):((tracks[st.cur].sents[st.sent]||{t:0}).t);
+  if(tcur>3||st.cur===0) playTrack(st.cur,0,true); else playTrack(st.cur-1,0,true); }
+
+/* ---------- UI updates ---------- */
+function setPlayingUI(on){
+  st.playing=on; $('#icPlay').toggleAttribute('hidden',on); $('#icPause').toggleAttribute('hidden',!on); $('#bPlay').setAttribute('aria-label',on?'一時停止':'再生');
+  if(st.cur>=0){ const li=liOf(st.cur); li.classList.toggle('live',on); li.querySelector('.pt-play').innerHTML=on?pauseSvg:playSvg; }
+  if('mediaSession' in navigator){ try{ navigator.mediaSession.playbackState=on?'playing':'paused'; }catch(e){} }
+}
+function updateNow(){
+  const t=tracks[st.cur]; if(!t) return;
+  const s=$('#nowSeal'); s.textContent=SEAL[t.ch.no]; s.classList.remove('idle');
+  $('#nowT').textContent=`P${t.no} ${t.title}`; $('#nowS').textContent=`${t.ch.label} ${t.ch.title}`;
+  $('#nowPos').textContent=`${t.idx+1}/${tracks.length}`;
+}
+let dragging=false; const seek=$('#seek');
+function updateProgress(x){
+  const t=tracks[st.cur]; if(!t) return;
+  const d=(st.mode==='audio'&&srcFor&&isFinite(audio.duration)&&audio.duration>0)?audio.duration:t.dur;
+  const c=x!=null?x:(st.mode==='audio'?(srcFor?audio.currentTime:lastTime):0);
+  seek.max=String(d); if(!dragging) seek.value=String(c);
+  $('#tCur').textContent=fmt(dragging?+seek.value:c); $('#tDur').textContent=fmt(d);
+}
+seek.addEventListener('input',()=>{ dragging=true; $('#tCur').textContent=fmt(+seek.value); });
+seek.addEventListener('change',()=>{ dragging=false; if(st.cur<0) return; const v=+seek.value;
+  if(st.mode==='audio') seekTo(v); else speechStart(st.cur,Math.max(0,sentAt(tracks[st.cur],v)),false); });
+let lastUser=0; ['wheel','touchmove','keydown'].forEach(ev=>addEventListener(ev,e=>{ if(ev!=='keydown'||['ArrowUp','ArrowDown','PageUp','PageDown'].includes(e.key)) lastUser=Date.now(); },{passive:true}));
+const userActive=()=>Date.now()-lastUser<4000;
+function scrollToEl(el,block){ if(document.visibilityState!=='visible') return; try{ el.scrollIntoView({block:block||'center',behavior:reduced?'auto':'smooth'}); }catch(e){} }
+function setSent(k){
+  if(k===st.sent) return; const box=textOf(st.cur); const old=box.querySelector('.s.now'); if(old) old.classList.remove('now');
+  st.sent=k; if(k<0||box.hidden) return; const el=box.querySelector(`.s[data-k="${k}"]`); if(!el) return;
+  el.classList.add('now'); if(st.follow&&!userActive()) scrollToEl(el,'center');
+}
+function savePos(force){ const now=Date.now(); if(!force&&now-lastSave<4000) return; lastSave=now; if(st.cur<0) return;
+  const t=tracks[st.cur]; const x=st.mode==='audio'?(srcFor?audio.currentTime:lastTime):((t.sents[Math.max(st.sent,0)]||{t:0}).t); lsSet(LS_POS,{id:t.id,t:Math.max(0,x-1)}); }
+
+/* ---------- media session ---------- */
+const ART={1:'icons/icon-512.png',2:'icons/icon-512.png',3:'icons/icon-512.png',4:'icons/icon-512.png'};
+function setMeta(t){ if(!('mediaSession' in navigator)) return; try{
+  navigator.mediaSession.metadata=new MediaMetadata({title:`P${t.no} ${t.title}`,artist:`${t.ch.label} ${t.ch.title}`,album:'宅建 スマートまとめレジュメ',
+    artwork:[{src:new URL(ART[t.ch.no],location.href).href,sizes:'512x512',type:'image/png'}]}); }catch(e){} }
+function posState(){ if(!('mediaSession' in navigator)||!navigator.mediaSession.setPositionState||st.mode!=='audio'||!srcFor) return;
+  const d=audio.duration; if(!isFinite(d)||d<=0) return; try{ navigator.mediaSession.setPositionState({duration:d,playbackRate:audio.playbackRate||1,position:Math.min(audio.currentTime,d)}); }catch(e){} }
+if('mediaSession' in navigator){ const H=(a,f)=>{ try{ navigator.mediaSession.setActionHandler(a,f); }catch(e){} };
+  H('play',()=>{ if(!isPlaying()) toggle(); }); H('pause',pause); H('stop',pause);
+  H('previoustrack',prev); H('nexttrack',next);
+  H('seekto',d=>{ if(st.mode==='audio'&&d&&isFinite(d.seekTime)) seekTo(d.seekTime); }); }
+
+/* ---------- sleep timer ---------- */
+function updateSleepInfo(){ const el=$('#sleepInfo'); if(st.sleepAt){ const m=Math.max(0,Math.ceil((st.sleepAt-Date.now())/60000)); el.textContent=`あと${m}分`; } else el.textContent=st.sleepPt?'この項目の終わりで停止':''; }
+function checkSleep(){ if(st.sleepAt&&Date.now()>=st.sleepAt){ st.sleepAt=0; $('#sleepSel').value='0'; pause(); updateSleepInfo(); toast('スリープタイマーで停止しました'); } }
+setInterval(()=>{ checkSleep(); if(!$('#sheet').hidden) updateSleepInfo(); },5000);
+$('#sleepSel').addEventListener('change',e=>{ const v=e.target.value; st.sleepAt=0; st.sleepPt=false; if(v==='pt') st.sleepPt=true; else if(+v>0) st.sleepAt=Date.now()+(+v)*60000; updateSleepInfo(); });
+
+/* ---------- offline save ---------- */
+const savedIds=new Set();
+function markSaved(id){ savedIds.add(id); const li=document.getElementById(id); if(li) li.classList.add('saved'); renderSaved(); }
+async function checkSaved(t){ try{ const c=await caches.open(PACK); if(await c.match(t.url)) markSaved(t.id); }catch(e){} }
+function renderSaved(){
+  const n=savedIds.size, all=tracks.length; $('#saveBar').style.width=(n/all*100)+'%';
+  const left=tracks.filter(t=>!savedIds.has(t.id)).reduce((a,t)=>a+(sizeOf[t.id]||0),0);
+  $('#saveInfo').textContent=`${n}/${all} 項目を保存済み`;
+  const b=$('#bSave'); if(!saving){ b.hidden=n===all; b.textContent=`残りをすべてダウンロード（約${Math.max(1,Math.round(left/1e6))}MB）`; }
+  $('#saveNote').textContent=n===all?'全項目を保存済みです。電波がない場所でも再生できます。':'一度再生した項目は自動で端末に保存されます。全部保存しておくと、電波がない場所でも途切れません（Wi-Fi 推奨）。';
+}
+async function refreshSaved(){ if(!('caches' in window)){ $('#offPanel').hidden=true; return; }
+  try{ const c=await caches.open(PACK); for(const t of tracks){ if(await c.match(t.url)){ savedIds.add(t.id); liOf(t.idx).classList.add('saved'); } } }catch(e){ $('#offPanel').hidden=true; return; }
+  renderSaved(); }
+let saving=false;
+$('#bSave').addEventListener('click',async()=>{
+  if(saving) return; saving=true; const b=$('#bSave'); b.textContent='ダウンロード中…'; b.disabled=true;
+  try{ try{ if(navigator.storage&&navigator.storage.persist) await navigator.storage.persist(); }catch(e){}
+    const c=await caches.open(PACK);
+    for(const t of tracks){ if(savedIds.has(t.id)) continue; if(!(await c.match(t.url))){ const r=await fetch(t.url,{cache:'no-store'}); if(!r.ok) throw new Error('HTTP '+r.status); await c.put(t.url,r); } markSaved(t.id); }
+    toast('全項目を保存しました。電波がなくても再生できます');
+  }catch(e){ toast('ダウンロードが止まりました。通信状態や空き容量を確認して、もう一度押してください'); }
+  saving=false; b.disabled=false; renderSaved();
+});
+
+/* ---------- install ---------- */
+let deferred=null;
+function showInstall(){
+  if(STANDALONE){ $('#installPanel').hidden=true; return; }
+  $('#installPanel').hidden=false;
+  $('#installAndroid').hidden=!deferred;
+  $('#installIos').hidden=!(IOS&&!INAPP&&!deferred);
+  $('#installOther').hidden=!!deferred||(IOS&&!INAPP);
+}
+addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); deferred=e; showInstall(); });
+addEventListener('appinstalled',()=>{ deferred=null; $('#installPanel').hidden=true; toast('インストールしました。ホーム画面のアイコンから開けます'); });
+$('#bInstall').addEventListener('click',async()=>{ if(!deferred) return; deferred.prompt(); try{ await deferred.userChoice; }catch(e){} deferred=null; showInstall(); });
+showInstall();
+
+/* ---------- controls wiring ---------- */
+$('#bPlay').addEventListener('click',toggle);
+$('#bBack').addEventListener('click',()=>skip(-15)); $('#bFwd').addEventListener('click',()=>skip(15));
+$('#bPrev').addEventListener('click',prev); $('#bNext').addEventListener('click',next);
+$('#playAll').addEventListener('click',()=>{ setScope('all'); playTrack(0,0,true); });
+list.addEventListener('click',e=>{
+  const b=e.target.closest('[data-play],[data-open],[data-chplay],.s'); if(!b) return;
+  if(b.dataset.chplay!=null){ setScope('chapter'); playTrack(tracks.findIndex(t=>t.ci===+b.dataset.chplay),0,true); return; }
+  if(b.dataset.play!=null){ const i=+b.dataset.play; if(i===st.cur&&isPlaying()) pause(); else if(i===st.cur) toggle(); else playTrack(i,0,true); return; }
+  if(b.dataset.open!=null){ const i=+b.dataset.open; setOpen(i,textOf(i).hidden,false); return; }
+  if(b.classList.contains('s')){ const i=+b.closest('.pt').dataset.i; const k=+b.dataset.k; const t=tracks[i];
+    lastUser=0; if(st.mode==='speech'){ const prevI=st.cur; st.cur=i; trackChanged(prevI,prevI!==i); speechStart(i,k,false); } else playTrack(i,t.sents[k].t,true); }
+});
+list.addEventListener('keydown',e=>{ if((e.key==='Enter'||e.key===' ')&&e.target.classList.contains('s')){ e.preventDefault(); e.target.click(); } });
+function setScope(s){ st.scope=s; document.querySelectorAll('[data-scope]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.scope===s))); savePrefs(); prefetch(); }
+document.querySelectorAll('[data-scope]').forEach(b=>b.addEventListener('click',()=>{ setScope(b.dataset.scope); toast({all:'最後まで続けて再生します',chapter:'この章の終わりまで続けて再生します',point:'いまの項目だけを再生します'}[b.dataset.scope]+(st.repeat?'（繰り返し）':'')); }));
+function setRepeat(v){ st.repeat=v; $('#bRepeat').setAttribute('aria-pressed',String(v)); savePrefs(); prefetch(); }
+$('#bRepeat').addEventListener('click',()=>{ setRepeat(!st.repeat); toast(st.repeat?'繰り返し再生：オン':'繰り返し再生：オフ'); });
+function setSpeed(v){ st.speed=v; applyRate(); $('#bSpeed').textContent=v.toFixed(1)+'×'; document.querySelectorAll('[data-speed]').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.speed===v))); savePrefs(); posState();
+  if(st.mode==='speech'&&spk.on) speechStart(st.cur,Math.max(st.sent,0),false); }
+$('#speedSeg').innerHTML=SPEEDS.map(v=>`<button type="button" data-speed="${v}" aria-pressed="false">${v.toFixed(1)}×</button>`).join('');
+$('#speedSeg').addEventListener('click',e=>{ const b=e.target.closest('[data-speed]'); if(b) setSpeed(+b.dataset.speed); });
+$('#bSpeed').addEventListener('click',()=>{ const i=SPEEDS.indexOf(st.speed); setSpeed(SPEEDS[(i+1)%SPEEDS.length]); });
+$('#bFollow').addEventListener('click',()=>{ st.follow=!st.follow; $('#bFollow').setAttribute('aria-pressed',String(st.follow)); savePrefs(); });
+function setMode(m){
+  if(m===st.mode) return; const wasPlaying=isPlaying(); const t=tracks[st.cur];
+  const at=t?(st.mode==='audio'?(srcFor?audio.currentTime:lastTime):((t.sents[Math.max(st.sent,0)]||{t:0}).t)):0;
+  pause(); setPlayingUI(false); st.mode=m; savePrefs();
+  document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===m)));
+  $('#voiceRow').hidden=m!=='speech'; if(m==='speech') loadVoices();
+  if(!t) return;
+  if(m==='audio'){ lastTime=at; if(wasPlaying) playTrack(st.cur,at,true); else { srcFor=null; updateProgress(at); } }
+  else if(wasPlaying) speechStart(st.cur,Math.max(0,sentAt(t,at)),false);
+}
+document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.mode)));
+$('#voiceSel').addEventListener('change',e=>{ st.voice=e.target.value; savePrefs(); if(spk.on) speechStart(st.cur,Math.max(st.sent,0),false); });
+$('#bMore').addEventListener('click',()=>{ $('#sheet').hidden=false; updateSleepInfo(); $('#sheetClose').focus(); });
+$('#sheetClose').addEventListener('click',()=>{ $('#sheet').hidden=true; $('#bMore').focus(); });
+$('#sheet').addEventListener('click',e=>{ if(e.target.id==='sheet') $('#sheet').hidden=true; });
+let forgetArmed=0;
+$('#bForget').addEventListener('click',async()=>{
+  if(Date.now()-forgetArmed>4000){ forgetArmed=Date.now(); $('#forgetNote').textContent='もう一度押すと削除します。'; return; }
+  pause(); await kv('del','key'); lsDel(LS_PASS); try{ await caches.delete(PACK); }catch(e){} location.reload();
+});
+addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&!$('#sheet').hidden){ $('#sheet').hidden=true; return; }
+  if(e.target.closest('input,select,textarea,button,.s')) return;
+  if(e.code==='Space'){ e.preventDefault(); toggle(); } else if(e.key==='ArrowLeft') skip(-5); else if(e.key==='ArrowRight') skip(5);
+});
+addEventListener('pagehide',()=>savePos(true));
+let hiddenAt=0;
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='hidden'){ hiddenAt=Date.now(); savePos(true); return; }
+  // returning to a paused app: start the next playback on a fresh audio element (works around iOS home-screen audio going silent after reopen)
+  if(st.mode==='audio'&&audio.paused&&hiddenAt&&Date.now()-hiddenAt>2000) needFresh=true;
+  if(st.cur>=0&&st.sent>=0&&st.follow){ const el=textOf(st.cur).querySelector('.s.now'); if(el) scrollToEl(el,'center'); }
+});
+addEventListener('pageshow',e=>{ if(e.persisted) needFresh=true; });
+
+/* ---------- init ---------- */
+setScope(st.scope); setRepeat(st.repeat); if(!SPEEDS.includes(st.speed)) st.speed=1; setSpeed(st.speed);
+$('#bFollow').setAttribute('aria-pressed',String(st.follow));
+if(!synth){ document.querySelector('[data-mode="speech"]').disabled=true; st.mode='audio'; }
+document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===st.mode)));
+$('#voiceRow').hidden=st.mode!=='speech';
+const pos=lsGet(LS_POS);
+if(pos&&byId[pos.id]){ const t=byId[pos.id]; $('#resume').hidden=false; $('#resumeSub').textContent=` ${t.ch.label} P${t.no} ${t.title} ${fmt(pos.t)}`;
+  $('#resume').addEventListener('click',()=>playTrack(t.idx,pos.t,true)); }
+refreshSaved();
+const ph=()=>document.documentElement.style.setProperty('--player-h',$('#player').offsetHeight+'px'); ph(); addEventListener('resize',ph);
+}
+
+boot();
+})();
+
+</script>
+</body>
+</html>
