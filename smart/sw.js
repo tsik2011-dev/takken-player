@@ -3,7 +3,7 @@
    a/<chapter>.bin?v=<hash> (encrypted audio): cache-first by exact URL (a new hash = a new download), saved when played or downloaded for offline use
    a/meta.json, a/data.bin: network-first
    fonts: cache-first */
-const VERSION = '2026.10.15-2';
+const VERSION = '2026.10.15-3';
 const SHELL = 'stx-shell-' + VERSION;
 const PACK = 'stx-pack-v1';
 const FONTS = 'stx-fonts';
