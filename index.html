@@ -200,6 +200,7 @@ body{margin:0}
       <button class="btn primary" id="playAll" type="button"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z"/></svg>全体を通して再生</button>
       <button class="btn" id="resume" type="button" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5"/></svg><span>続きから<span class="sub" id="resumeSub"></span></span></button>
     </div>
+    <p class="note">再生中にホームボタンで閉じたり画面をロックしたりしても、再生は続きます。通知やロック画面から一時停止・前後の項目へ移動できます。</p>
     <div class="panel" id="installPanel" hidden>
       <span class="k">ホーム画面にインストール</span>
       <div class="row" id="installApk" hidden><a class="btn primary" href="takken-player.apk" download>Android アプリ版をダウンロード</a></div>
@@ -554,7 +555,15 @@ function prev(){ if(st.cur<0) return; if(NATIVE){ NATIVE.prev(); nativeKick(); r
   if(tcur>3||st.cur===0) playTrack(st.cur,0,true); else playTrack(st.cur-1,0,true); }
 
 /* ---------- UI updates ---------- */
+let trapArmed=false;
+function armBackTrap(){ if(trapArmed) return; try{ history.pushState({tkp:'stay'},'',location.href); trapArmed=true; }catch(e){} }
+addEventListener('popstate',()=>{
+  trapArmed=false;
+  if(!$('#sheet').hidden){ $('#sheet').hidden=true; if(isPlaying()) armBackTrap(); return; }
+  if(isPlaying()){ armBackTrap(); toast('再生中は「戻る」では閉じません。ホームボタンで閉じれば、そのまま再生が続きます'); }
+});
 function setPlayingUI(on){
+  if(on) armBackTrap();
   st.playing=on; $('#icPlay').toggleAttribute('hidden',on); $('#icPause').toggleAttribute('hidden',!on); $('#bPlay').setAttribute('aria-label',on?'一時停止':'再生');
   if(st.cur>=0){ const li=liOf(st.cur); li.classList.toggle('live',on); li.querySelector('.pt-play').innerHTML=on?pauseSvg:playSvg; }
   if('mediaSession' in navigator){ try{ navigator.mediaSession.playbackState=on?'playing':'paused'; }catch(e){} }
@@ -634,11 +643,8 @@ $('#bSave').addEventListener('click',async()=>{
 /* ---------- install ---------- */
 let deferred=null;
 function showInstall(){
-  if(NATIVE){ $('#installPanel').hidden=true; return; }
-  if(ANDROID){ $('#installPanel').hidden=false; $('#installPanel .k').textContent='Android アプリ版'; $('#installApk').hidden=false;
-    const n=$('#installApkNote'); n.hidden=false; n.textContent='アプリを閉じても、アプリ一覧から消しても再生が続く Android 専用アプリです。ダウンロードしたファイルを開いてインストールしてください（初回は「この提供元のアプリを許可」をオンにします）。';
-    ['#installAndroid','#installIos','#installOther'].forEach(x=>$(x).hidden=true); return; }
-  if(STANDALONE){ $('#installPanel').hidden=true; return; }
+  if(NATIVE||STANDALONE){ $('#installPanel').hidden=true; return; }
+  $('#installApk').hidden=true; $('#installApkNote').hidden=true;
   $('#installPanel').hidden=false;
   $('#installAndroid').hidden=!deferred;
   $('#installIos').hidden=!(IOS&&!INAPP&&!deferred);
@@ -685,7 +691,7 @@ function setMode(m){
 }
 document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.mode)));
 $('#voiceSel').addEventListener('change',e=>{ st.voice=e.target.value; savePrefs(); if(spk.on) speechStart(st.cur,Math.max(st.sent,0),false); });
-$('#bMore').addEventListener('click',()=>{ $('#sheet').hidden=false; updateSleepInfo(); $('#sheetClose').focus(); });
+$('#bMore').addEventListener('click',()=>{ armBackTrap(); $('#sheet').hidden=false; updateSleepInfo(); $('#sheetClose').focus(); });
 $('#sheetClose').addEventListener('click',()=>{ $('#sheet').hidden=true; $('#bMore').focus(); });
 $('#sheet').addEventListener('click',e=>{ if(e.target.id==='sheet') $('#sheet').hidden=true; });
 let forgetArmed=0;

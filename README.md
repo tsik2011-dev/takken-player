@@ -12,6 +12,7 @@
 
 - 画面は上の Web 版をそのまま表示し、音声の再生だけを Android のフォアグラウンドサービス（MediaPlayer + MediaSession）で行う
 - 通知・ロック画面・Bluetooth イヤホンから操作でき、音声は端末に保存されるのでオフラインでも再生できる
+- Play ストア以外からのインストール（サイドロード）が必要なため、Android の「高度な保護機能」がオンの端末ではインストールできない
 - ソースは `android/`。`main` に push すると GitHub Actions がビルドし、`takken-player.apk` を更新する
 - Web 側からは `window.TakkenNative`（`configure` / `unlock` / `setQueue` / `play` / `toggle` / `seek` / `getState` など）で操作する
 
