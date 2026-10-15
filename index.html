@@ -186,6 +186,8 @@ body{margin:0}
 .pt-text .s.q{font-weight:500;display:block;margin-bottom:2px}
 .pt-text .s.ans{display:inline-block;font-weight:700;margin:4px 10px 2px 0;padding:0 10px;border-radius:6px;background:var(--accent-soft);color:var(--accent);line-height:1.7}
 .pt-text .s.ans.ng{background:color-mix(in srgb,var(--seal) 14%,transparent);color:var(--seal)}
+.qgo-row{margin-top:12px}
+.chip.qgo{color:var(--seal);border-color:var(--seal);font-size:13px;padding:7px 13px}
 /* quiz */
 body.noscroll{overflow:hidden}
 .quiz{position:fixed;inset:0;z-index:40;background:var(--paper);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
@@ -531,7 +533,9 @@ function renderText(i){
   const box=textOf(i); if(box.dataset.r) return box; const t=tracks[i];
   let k=0; const dr=t.grp==='drill';
   const cls=s=>!dr?'':s.w?' q':(s.v&&/^答え/.test(s.s))?(' ans '+(s.s.includes('○')?'ok':'ng')):'';
-  box.innerHTML='<div class="hint">文をタップすると、そこから再生します。</div>'+t.paras.map(p=>'<p'+(dr?' class="qa"':'')+'>'+p.map(s=>`<span class="s${cls(s)}" tabindex="0" data-k="${k++}">${esc(s.s)}</span>`).join('')+'</p>').join('');
+  const qsrc=t.grp==='main'?t.id:dr?t.src:null, qn=qsrc&&DRILL&&DRILL[qsrc]?DRILL[qsrc].length:0;
+  box.innerHTML='<div class="hint">文をタップすると、そこから再生します。</div>'+t.paras.map(p=>'<p'+(dr?' class="qa"':'')+'>'+p.map(s=>`<span class="s${cls(s)}" tabindex="0" data-k="${k++}">${esc(s.s)}</span>`).join('')+'</p>').join('')
+    +(qn?`<div class="qgo-row"><button class="chip qgo" type="button" data-qgo="${qsrc}">${dr?'画面で○×を答える':'このポイントの○×問題を解く'}（${qn}問）</button></div>`:'');
   box.dataset.r='1'; return box;
 }
 const autoOpened=new Set();
@@ -904,7 +908,8 @@ $('#bBack').addEventListener('click',()=>skip(-15)); $('#bFwd').addEventListener
 $('#bPrev').addEventListener('click',prev); $('#bNext').addEventListener('click',next);
 $('#playAll').addEventListener('click',()=>{ setScope('all'); playTrack(0,0,true); });
 list.addEventListener('click',e=>{
-  const b=e.target.closest('[data-play],[data-open],[data-chplay],[data-grpplay],.s'); if(!b) return;
+  const b=e.target.closest('[data-qgo],[data-play],[data-open],[data-chplay],[data-grpplay],.s'); if(!b) return;
+  if(b.dataset.qgo!=null){ quizPoint(b.dataset.qgo); return; }
   if(b.dataset.chplay!=null){ setScope('chapter'); playTrack(tracks.findIndex(t=>t.ci===+b.dataset.chplay),0,true); return; }
   if(b.dataset.grpplay!=null){ setScope('all'); playTrack(tracks.findIndex(t=>t.grp===b.dataset.grpplay),0,true); return; }
   if(b.dataset.play!=null){ const i=+b.dataset.play; if(i===st.cur&&isPlaying()) pause(); else if(i===st.cur) toggle(); else playTrack(i,0,true); return; }
@@ -1032,6 +1037,7 @@ function openQuiz(){
   try{ $('#qRange').focus({preventScroll:true}); }catch(e){}
 }
 function closeQuiz(){ $('#quiz').hidden=true; document.body.classList.remove('noscroll'); updatePackSub(); }
+function quizPoint(id){ if(!qItems.length) return; qp.range=id; qp.filter='all'; qSavePrefs(); openQuiz(); qStart(qPool()); }
 function quizKey(e){
   if(e.key==='Escape'){ closeQuiz(); return; }
   if($('#qCard').hidden||e.target.closest('select')) return;
