@@ -1,0 +1,1069 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#F3F5F9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F1320" media="(prefers-color-scheme: dark)">
+<meta name="robots" content="noindex,nofollow">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="スマテキ読み上げ">
+<title>スマートテキスト 読み上げ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=BIZ+UDPMincho:wght@700&display=swap">
+<style>
+/* Layout: study reader — contents rail beside a highlighted reading column, with a persistent player dock along the bottom. */
+:root{
+  --bg:#F3F5F9; --surface:#FFFFFF; --sunk:#E8ECF4; --line:#D5DBE7;
+  --fg:#18203A; --muted:#5B6580; --accent:#2B4A93; --accent-ink:#FFFFFF;
+  --marker:rgba(255,206,40,.55); --marker-soft:rgba(255,206,40,.18);
+  --ok:#17775A; --ng:#B3363A; --box:#EEF2FB;
+  --font-body:"BIZ UDPGothic","Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",Meiryo,sans-serif;
+  --font-display:"BIZ UDPMincho","Hiragino Mincho ProN","Yu Mincho","Noto Serif JP",serif;
+  --dock-h:176px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F1320; --surface:#171C2B; --sunk:#1F2537; --line:#2C3449;
+  --fg:#E4E8F2; --muted:#9AA3BB; --accent:#9DB4F2; --accent-ink:#0F1320;
+  --marker:rgba(255,200,40,.36); --marker-soft:rgba(255,200,40,.10);
+  --ok:#5CCB9F; --ng:#F08488; --box:#1B2336; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1320; --surface:#171C2B; --sunk:#1F2537; --line:#2C3449;
+  --fg:#E4E8F2; --muted:#9AA3BB; --accent:#9DB4F2; --accent-ink:#0F1320;
+  --marker:rgba(255,200,40,.36); --marker-soft:rgba(255,200,40,.10);
+  --ok:#5CCB9F; --ng:#F08488; --box:#1B2336; color-scheme:dark}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:16px;line-height:1.75;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:0 calc(var(--dock-h) + env(safe-area-inset-bottom,0px) + 16px)}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:6px}
+.wrap{max-width:1180px;margin:0 auto}
+
+/* header */
+.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px;padding-block:22px 14px}
+.brand{min-width:0}
+.eyebrow{font-size:12px;letter-spacing:.12em;color:var(--muted);font-weight:700}
+h1.app{font-family:var(--font-display);font-size:clamp(26px,5.4vw,38px);line-height:1.25;margin:4px 0 0;text-wrap:balance;letter-spacing:.02em}
+h1.app .mk{background:linear-gradient(transparent 58%,var(--marker) 58%);padding:0 .08em}
+.meta{color:var(--muted);font-size:13px;margin-top:6px}
+.resume{display:flex;gap:10px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:9px 16px;font-weight:700;font-size:14px;line-height:1.3;min-height:42px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn svg{width:16px;height:16px;flex:none}
+.btn .sub{font-weight:400;opacity:.8;font-size:12px}
+
+/* tabs (mobile only) */
+.tabs{display:none;position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:6px;margin-bottom:8px}
+.tabs .seg{width:100%}
+.seg{display:inline-flex;background:var(--sunk);border-radius:999px;padding:3px;gap:2px}
+.seg button{flex:1;border:0;background:transparent;border-radius:999px;padding:7px 14px;font-weight:700;font-size:13px;color:var(--muted);white-space:nowrap}
+.seg button[aria-pressed="true"],.seg button[aria-selected="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+
+/* layout */
+.layout{display:grid;grid-template-columns:minmax(300px,360px) minmax(0,1fr);gap:28px;align-items:start}
+.toc{position:sticky;top:12px;max-height:calc(100vh - var(--dock-h) - 40px);overflow:auto;padding-right:6px;min-width:0}
+.reader{min-width:0;max-width:44em}
+
+/* TOC */
+.mode{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.mode .lbl{font-size:12px;color:var(--muted);font-weight:700;letter-spacing:.08em}
+.mode .seg{width:100%}
+.part{margin-bottom:18px}
+.part-h{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:2px solid var(--fg)}
+.part-h h2{font-family:var(--font-display);font-size:19px;margin:0;flex:1;min-width:0}
+.dur{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.play-ic{flex:none;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;color:var(--accent)}
+.play-ic svg{width:14px;height:14px}
+.play-ic:hover{border-color:var(--accent)}
+.chap{border-bottom:1px solid var(--line)}
+.chap-row{display:flex;align-items:center;gap:8px;padding:8px 0}
+.chap-open{flex:1;min-width:0;display:flex;align-items:baseline;gap:8px;text-align:left;border:0;background:none;padding:2px 0}
+.chap-no{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none;width:3.2em}
+.chap-t{font-weight:700;font-size:15px;line-height:1.4}
+.chap.cur .chap-t{color:var(--accent)}
+.prog{font-size:11px;color:var(--muted);margin-left:4px;white-space:nowrap}
+.prog.done{color:var(--ok);font-weight:700}
+.units{list-style:none;margin:0 0 8px;padding:0 0 0 3.2em}
+.units li{display:flex;align-items:center;gap:6px}
+.unit-b{flex:1;min-width:0;text-align:left;border:0;background:none;padding:5px 0;font-size:13.5px;line-height:1.45;color:var(--fg);display:flex;gap:6px;align-items:baseline}
+.unit-b .chk{flex:none;width:14px;color:var(--ok);font-size:12px}
+.unit-b.cur{color:var(--accent);font-weight:700}
+.unit-b.mt{color:var(--muted)}
+.mini-play{flex:none;border:0;background:none;color:var(--accent);width:30px;height:30px;display:grid;place-items:center;border-radius:50%}
+.mini-play:hover{background:var(--sunk)}
+.mini-play svg{width:12px;height:12px}
+
+/* reader */
+.ch-head{padding:6px 0 10px;border-bottom:1px solid var(--line);margin-bottom:8px}
+.ch-head .eyebrow{display:flex;gap:10px;align-items:center}
+.ch-title{font-family:var(--font-display);font-size:clamp(24px,4.6vw,32px);line-height:1.35;margin:4px 0 10px;text-wrap:balance}
+.ch-actions{display:flex;gap:8px;flex-wrap:wrap}
+.ch-actions .btn{min-height:38px;padding:7px 14px;font-size:13px}
+.s{cursor:pointer;border-radius:3px;transition:background-size .25s ease;background-image:linear-gradient(transparent 56%,var(--marker) 56%);background-repeat:no-repeat;background-size:0% 100%;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.s:hover{background-color:var(--marker-soft)}
+.s.now{background-size:100% 100%}
+strong{color:var(--accent);font-weight:700}
+.unit{padding-top:18px;scroll-margin-top:70px}
+.unit + .unit{border-top:1px dashed var(--line);margin-top:18px}
+.unit h2{font-size:20px;line-height:1.45;margin:0 0 10px;display:flex;gap:12px;align-items:baseline;text-wrap:balance}
+.unit h2 .num{flex:none;display:inline-grid;place-items:center;min-width:1.8em;height:1.8em;padding:0 .3em;border:2px solid var(--accent);color:var(--accent);font-size:15px;border-radius:6px;font-variant-numeric:tabular-nums;transform:translateY(-2px)}
+.unit h3{font-size:16.5px;margin:18px 0 6px;line-height:1.5}
+.unit p{margin:8px 0}
+.points{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 16px 10px;margin:8px 0}
+.points .lab{font-size:12px;font-weight:700;letter-spacing:.1em;color:var(--accent)}
+.points ol{margin:6px 0 0;padding-left:1.6em}
+.points li{margin:4px 0;font-weight:700}
+.points li::marker{color:var(--accent);font-family:var(--font-display);font-size:1.15em}
+.tag{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.06em;padding:2px 10px;border-radius:999px;margin:14px 0 4px}
+.tag.case{background:var(--accent);color:var(--accent-ink)}
+.tag.conc{background:var(--sunk);color:var(--fg)}
+.fig{border-left:3px solid var(--line);padding:4px 0 4px 14px;margin:10px 0;color:var(--muted);font-size:15px}
+.fig::before{content:"図の内容";display:block;font-size:11px;font-weight:700;letter-spacing:.12em;color:var(--muted)}
+ul.lst{margin:6px 0;padding-left:1.3em}
+ul.lst li{margin:5px 0}
+.terms{margin:6px 0;display:grid;gap:2px}
+.term{display:grid;grid-template-columns:minmax(6.5em,9em) minmax(0,1fr);gap:4px 14px;padding:8px 0;border-bottom:1px solid var(--line)}
+.term dt{font-weight:700;margin:0}
+.term dt .lb{color:var(--muted);font-weight:400;font-size:12px;margin-right:4px;font-variant-numeric:tabular-nums}
+.term dd{margin:0;min-width:0}
+.hit{background:var(--box);border-radius:12px;padding:12px 16px;margin:16px 0 6px}
+.hit .lab{font-size:12.5px;font-weight:700;letter-spacing:.08em;color:var(--accent);display:flex;align-items:center;gap:6px}
+.hit .lab svg{width:15px;height:15px}
+.hit ul{list-style:none;margin:6px 0 0;padding:0}
+.hit li{position:relative;padding-left:1.5em;margin:6px 0}
+.hit li::before{content:"";position:absolute;left:0;top:.42em;width:.9em;height:.9em;border:1.5px solid var(--muted);border-radius:2px}
+.q{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.q .qn{font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap}
+.q .ans{grid-column:2;justify-self:start;font-size:14px;font-weight:700;border-radius:999px;padding:1px 12px;border:1.5px dashed var(--line);color:var(--muted)}
+.q .ans .mk2{display:inline-block;filter:blur(5px);transition:filter .2s}
+.q .ans.show .mk2{filter:none}
+.q .ans.show.o{border:1.5px solid var(--ok);color:var(--ok)}
+.q .ans.show.x{border:1.5px solid var(--ng);color:var(--ng)}
+.ch-nav{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:28px 0 10px}
+.follow{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--dock-h) + env(safe-area-inset-bottom,0px) + 12px);z-index:9;box-shadow:0 4px 14px rgba(0,0,0,.18)}
+
+/* dock */
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:10;background:var(--surface);border-top:1px solid var(--line);
+  padding:8px max(16px,env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));box-shadow:0 -6px 20px rgba(10,20,50,.08)}
+.dock-in{max-width:1180px;margin:0 auto;display:grid;gap:6px}
+.now-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;min-width:0}
+.now{min-width:0;overflow:hidden}
+.now .a{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.now .b{font-weight:700;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.scope{font-size:11.5px;color:var(--muted);text-align:right;white-space:nowrap;flex:none;max-width:45%;overflow:hidden;text-overflow:ellipsis}
+.bar{display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.bar input{flex:1;min-width:0;accent-color:var(--accent);height:22px}
+.ctrls{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.tc{display:flex;align-items:center;gap:4px}
+.ib{border:0;background:none;width:44px;height:44px;display:grid;place-items:center;border-radius:50%;color:var(--fg)}
+.ib:hover{background:var(--sunk)}
+.ib svg{width:22px;height:22px}
+.ib.big{width:54px;height:54px;background:var(--accent);color:var(--accent-ink)}
+.ib.big:hover{background:var(--accent);filter:brightness(1.08)}
+.ib.big svg{width:24px;height:24px}
+.ib .t{font-size:9px;font-weight:700;position:absolute}
+.opts{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.opt{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)}
+.opt select{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:4px 6px;font-size:13px;color:var(--fg)}
+.tog{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:4px 10px;font-size:13px}
+.tog[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.spin{animation:sp 1s linear infinite;transform-origin:center}
+@keyframes sp{to{transform:rotate(360deg)}}
+.toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 14px);transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;z-index:20;max-width:min(92vw,520px);box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.credit{font-size:11.5px;color:var(--muted);margin:30px 0 0;line-height:1.6}
+
+@media (max-width: 899px){
+  :root{--dock-h:196px}
+  .tabs{display:block}
+  .layout{display:block}
+  .toc{position:static;max-height:none;overflow:visible;padding-right:0}
+  body[data-view="read"] .toc{display:none}
+  body[data-view="toc"] .reader{display:none}
+  .reader{max-width:none}
+  .term{grid-template-columns:minmax(0,1fr)}
+  .top{padding-block:14px 8px}
+  .ctrls{justify-content:center}
+  .tc{width:100%;justify-content:space-between}
+  .opts{width:100%;flex-wrap:nowrap;justify-content:space-between;gap:6px}
+  .opt select{padding:4px 2px;font-size:13px}
+  .ib{width:46px;height:46px}
+  .ib.big{width:58px;height:58px}
+}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+:root{padding-top:env(safe-area-inset-top,0px)}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+.lock{min-height:70vh;display:grid;place-items:center;padding-block:40px}
+.lock-card{width:100%;max-width:420px;display:grid;gap:14px;justify-items:start}
+.lock-card img{border-radius:18px}
+.lock-card h1{font-family:var(--font-display);font-size:26px;margin:0;line-height:1.3}
+.lock-card p{margin:0;color:var(--muted);font-size:14px}
+.lock-form{display:flex;gap:8px;width:100%}
+.lock-form input{flex:1;min-width:0;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:10px;padding:10px 12px;font-size:16px}
+.lock-card .lock-err{color:var(--ng);font-weight:700}
+.pwa{display:flex;flex-wrap:wrap;gap:8px 12px;margin-top:10px;align-items:center}
+.pwa .btn{min-height:36px;padding:6px 14px;font-size:13px}
+.pwa .hint{font-size:12.5px;color:var(--muted);line-height:1.5}
+.pwa .ok{font-size:12.5px;color:var(--ok);font-weight:700}
+.ib.big.wait svg{opacity:.45}
+
+</style>
+</head>
+<body>
+
+
+<audio id="au" preload="auto"></audio>
+<div class="lock" id="lock">
+  <div class="lock-card">
+    <img src="icons/icon-192.png" alt="" width="72" height="72">
+    <h1>スマートテキスト 読み上げ</h1>
+    <p id="lockMsg">読み込んでいます…</p>
+    <form class="lock-form" id="lockForm" hidden>
+      <input id="pass" name="pass" type="password" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="合言葉" aria-label="合言葉">
+      <button class="btn primary" type="submit" id="lockBtn">開く</button>
+    </form>
+    <p class="lock-err" id="lockErr" role="alert" hidden></p>
+  </div>
+</div>
+
+<div id="app" hidden>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="eyebrow">TAC 宅地建物取引士講座 2026</div>
+      <h1 class="app">スマートテキスト <span class="mk">読み上げ</span></h1>
+      <div class="meta" id="meta"></div>
+      <div class="pwa" id="pwaBar"></div>
+    </div>
+    <div class="resume" id="resume"></div>
+  </header>
+
+  <div class="tabs"><div class="seg" role="tablist" aria-label="表示">
+    <button id="tab-toc" role="tab" aria-selected="true">目次</button>
+    <button id="tab-read" role="tab" aria-selected="false">本文</button>
+  </div></div>
+
+  <main class="layout">
+    <nav class="toc" id="toc" aria-label="目次">
+      <div class="mode">
+        <span class="lbl">再生する内容</span>
+        <div class="seg" id="modeSeg" role="group" aria-label="再生する内容">
+          <button data-mode="full" aria-pressed="true">全文</button>
+          <button data-mode="key" aria-pressed="false">要点だけ</button>
+          <button data-mode="test" aria-pressed="false">ミニテストだけ</button>
+        </div>
+      </div>
+      <div id="tocBody"></div>
+    </nav>
+    <article class="reader" id="reader"></article>
+  </main>
+</div>
+
+<button class="btn primary follow" id="followBtn" hidden>再生中の位置へ戻る</button>
+
+<div class="dock" id="dock" role="region" aria-label="プレーヤー">
+  <div class="dock-in">
+    <div class="now-row">
+      <div class="now"><div class="a" id="nowA">再生していません</div><div class="b" id="nowB">目次の ▶ か「最初から全部再生」を押してください</div></div>
+      <div class="scope" id="scope"></div>
+    </div>
+    <div class="bar"><span id="tCur">0:00</span><input id="seek" type="range" min="0" max="100" step="0.5" value="0" aria-label="再生位置"><span id="tDur">0:00</span></div>
+    <div class="ctrls">
+      <div class="tc">
+        <button class="ib" id="bPrevSec" aria-label="前の節へ" title="前の節へ"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+        <button class="ib" id="bPrevS" aria-label="1文戻る" title="1文戻る"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.3-5.6"/><path d="M4 4v4h4"/><path d="M10.5 9.5 8.5 12l2 2.5"/><path d="M15.5 9.5 13.5 12l2 2.5"/></svg></button>
+        <button class="ib big" id="bPlay" aria-label="再生"><svg viewBox="0 0 24 24" fill="currentColor" id="icPlay"><path d="M8 5v14l11-7z"/></svg></button>
+        <button class="ib" id="bNextS" aria-label="1文進む" title="1文進む"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/><path d="M8.5 9.5l2 2.5-2 2.5"/><path d="M13.5 9.5l2 2.5-2 2.5"/></svg></button>
+        <button class="ib" id="bNextSec" aria-label="次の節へ" title="次の節へ"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+      </div>
+      <div class="opts">
+        <label class="opt">速度 <select id="speed">
+          <option value="0.8">0.8×</option><option value="1">1.0×</option><option value="1.2">1.2×</option><option value="1.4">1.4×</option><option value="1.6">1.6×</option><option value="1.8">1.8×</option><option value="2">2.0×</option>
+        </select></label>
+        <label class="opt">タイマー <select id="sleep">
+          <option value="0">オフ</option><option value="15">15分</option><option value="30">30分</option><option value="45">45分</option><option value="60">60分</option><option value="ch">章の終わり</option>
+        </select></label>
+        <button class="tog" id="bRepeat" aria-pressed="false" title="再生範囲をくり返す">くり返し</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /app -->
+<script>
+function boot(DATA){
+"use strict";
+var PARTS = DATA.parts, CH = DATA.chapters;
+var ORDER = []; PARTS.forEach(function(p){ p.c.forEach(function(c){ ORDER.push(c); CH[c].part = p; }); });
+var CIRC = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
+
+/* ---------- storage (per-viewer conveniences only) ---------- */
+var store = {
+  get: function(k, d){ try{ var v = localStorage.getItem("stx26:"+k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set: function(k, v){ try{ localStorage.setItem("stx26:"+k, JSON.stringify(v)); }catch(e){} }
+};
+var heard = {}; (store.get("heard", [])).forEach(function(id){ heard[id] = 1; });
+
+/* ---------- derived structures ---------- */
+ORDER.forEach(function(cid){
+  var c = CH[cid]; c.id = cid; c.flat = [];
+  c.u.forEach(function(u, ui){
+    u.ch = cid; u.ui = ui; u.first = c.flat.length;
+    u.B.forEach(function(b, bi){
+      b[2].forEach(function(s, si){ c.flat.push({a:s[1], b:s[2], ui:ui, bi:bi, si:si, ans:!!s[3]}); });
+    });
+    u.last = c.flat.length - 1;
+    u.speechEnd = u.last >= u.first ? c.flat[u.last].b : u.b;
+  });
+});
+function fmt(sec){ sec = Math.max(0, Math.round(sec)); var h = Math.floor(sec/3600), m = Math.floor(sec%3600/60), s = sec%60;
+  return h ? h+":"+String(m).padStart(2,"0")+":"+String(s).padStart(2,"0") : m+":"+String(s).padStart(2,"0"); }
+function fmtLong(sec){ var m = Math.round(sec/60); var h = Math.floor(m/60); m = m%60; return h ? h+"時間"+(m? m+"分":"") : m+"分"; }
+function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function rich(s){ return esc(s).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\*\*/g, ""); }
+function unitLabel(u){
+  if (u.k === "intro") return "今回のヒッタツ！ポイント";
+  if (u.k === "minitest") return "ミニテスト" + (CIRC[u.n-1] || u.n);
+  return u.n + "　" + u.t;
+}
+function chLabel(c){ return "第" + c.n + "章 " + c.t; }
+var TOTAL = ORDER.reduce(function(a, cid){ return a + CH[cid].d; }, 0);
+
+/* ---------- elements ---------- */
+var $ = function(id){ return document.getElementById(id); };
+var au = $("au"), reader = $("reader"), tocBody = $("tocBody");
+var bPlay = $("bPlay"), seek = $("seek");
+
+/* ---------- toast ---------- */
+var toastT = null;
+function toast(msg){
+  var el = document.querySelector(".toast"); if (!el){ el = document.createElement("div"); el.className = "toast"; el.setAttribute("role","status"); document.body.appendChild(el); }
+  el.textContent = msg; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(function(){ el.hidden = true; }, 3200);
+}
+
+/* ---------- mode ---------- */
+var mode = store.get("mode", "full");
+var MODE_NAME = {full:"全文", key:"要点だけ", test:"ミニテストだけ"};
+function setModeUI(){
+  [].forEach.call(document.querySelectorAll("#modeSeg button"), function(b){ b.setAttribute("aria-pressed", b.dataset.mode === mode ? "true" : "false"); });
+}
+document.getElementById("modeSeg").addEventListener("click", function(e){
+  var b = e.target.closest("button"); if (!b) return;
+  mode = b.dataset.mode; store.set("mode", mode); setModeUI();
+  toast("目次の ▶ で「" + MODE_NAME[mode] + "」を再生します");
+});
+
+/* ---------- queue construction ---------- */
+function chaptersOf(range){
+  if (range.type === "all") return ORDER.slice();
+  if (range.type === "part") return PARTS.filter(function(p){ return p.id === range.id; })[0].c.slice();
+  if (range.type === "ch") return [range.id];
+  if (range.type === "from"){ return ORDER.slice(ORDER.indexOf(range.c)); }
+  return [range.c];
+}
+function keySegs(c, units){
+  var out = [];
+  units.forEach(function(u){
+    if (u.k === "intro"){ out.push({c:c.id, a:u.a, b:u.b}); return; }
+    if (u.k !== "section") return;
+    var runStart = -1, runEnd = -1, title = null;
+    u.B.forEach(function(b){
+      var t = b[0];
+      if (t === "sectitle" && b[2].length){ title = [b[2][0][1], b[2][b[2].length-1][2]]; }
+      if (t === "boxhead" || t === "box"){
+        var sa = b[2][0][1], sb = b[2][b[2].length-1][2];
+        if (runStart < 0) runStart = sa; runEnd = sb;
+      } else if (runStart >= 0){ flush(); }
+    });
+    if (runStart >= 0) flush();
+    function flush(){
+      if (title){ out.push({c:c.id, a:Math.max(0,title[0]-0.15), b:title[1]+0.45}); title = null; }
+      out.push({c:c.id, a:Math.max(0,runStart-0.15), b:runEnd+0.55}); runStart = -1;
+    }
+  });
+  return out;
+}
+function buildQueue(range, md){
+  var segs = [];
+  chaptersOf(range).forEach(function(cid, idx){
+    var c = CH[cid];
+    var units = c.u;
+    if (range.type === "unit") units = [c.u[range.u]];
+    if (md === "full"){
+      if (range.type === "unit"){ var u = units[0]; segs.push({c:cid, a:u.a, b:u.b, full: u.ui === c.u.length-1}); }
+      else if (range.type === "from" && idx === 0){ segs.push({c:cid, a:range.t || 0, b:c.d, full:true}); }
+      else segs.push({c:cid, a:0, b:c.d, full:true});
+    } else if (md === "key"){
+      if (range.type === "unit" && units[0].k !== "intro"){
+        segs = segs.concat(keySegs(c, units));
+      } else {
+        segs = segs.concat(keySegs(c, units));
+      }
+    } else {
+      units.forEach(function(u){ if (u.k === "minitest") segs.push({c:cid, a:u.a, b:u.b, full: u.ui === c.u.length-1}); });
+    }
+  });
+  // merge contiguous
+  var m = [];
+  segs.forEach(function(s){
+    var p = m[m.length-1];
+    if (p && p.c === s.c && !p.full && Math.abs(s.a - p.b) < 0.08){ p.b = s.b; p.full = s.full; }
+    else m.push({c:s.c, a:s.a, b:s.b, full:!!s.full});
+  });
+  m.forEach(function(s){ s.len = (s.full ? CH[s.c].d : s.b) - s.a; });
+  return m;
+}
+function rangeLabel(r){
+  if (r.type === "all") return "全体";
+  if (r.type === "part") return "第" + r.id + "部 " + PARTS.filter(function(p){return p.id===r.id;})[0].name;
+  if (r.type === "ch") return chLabel(CH[r.id]);
+  if (r.type === "from") return chLabel(CH[r.c]) + "の途中から最後まで";
+  var u = CH[r.c].u[r.u]; return chLabel(CH[r.c]) + " › " + unitLabel(u);
+}
+
+/* ---------- player state ---------- */
+var queue = [], qi = -1, range = null, qmode = "full", curCh = null, pendingSeek = null, advancedFor = -1;
+var repeat = store.get("repeat", false), sleepAt = 0, sleepCh = null, playing = false;
+var curUnit = null, curK = -1;
+
+function setQueue(r, md, start){
+  var q = buildQueue(r, md);
+  if (!q.length){
+    if (md === "key") toast("この範囲には要点（これでヒッタツ！）がありません。全文を再生します。");
+    else if (md === "test") toast("この範囲にはミニテストがありません。全文を再生します。");
+    md = "full"; q = buildQueue(r, md);
+  }
+  range = r; qmode = md; queue = q; qi = 0; advancedFor = -1;
+  var t = null;
+  if (start){
+    for (var i = 0; i < q.length; i++){
+      var s = q[i], end = s.full ? CH[s.c].d : s.b;
+      if (s.c === start.c && start.t >= s.a - 0.01 && start.t < end){ qi = i; t = start.t; break; }
+    }
+  }
+  $("scope").textContent = "範囲：" + rangeLabel(r) + "・" + MODE_NAME[md];
+  loadSeg(qi, t, true);
+  saveState();
+}
+/* ---- audio source: decrypted chapter packs (blob URLs) ---- */
+var loadTok = 0, silent = false, errTries = {};
+function setSrc(cid, autoplay){
+  var tok = ++loadTok; curCh = cid; au.dataset.ch = cid;
+  var ready = PACK.ready(cid);
+  if (ready){ assign(ready); return; }
+  bPlay.classList.add("wait");
+  // keep the phone's audio session alive while the next chapter is decrypted (matters in the background)
+  if (autoplay && (playing || !au.paused)){ silent = true; au.loop = true; au.src = "silence.mp3"; var pp = au.play(); if (pp && pp.catch) pp.catch(function(){}); }
+  PACK.url(cid).then(function(u){ if (tok === loadTok) assign(u); }).catch(function(){
+    if (tok !== loadTok) return;
+    silent = false; au.loop = false; try{ au.pause(); }catch(e){}
+    setPlayingUI(false); bPlay.classList.remove("wait");
+    toast(navigator.onLine === false ? "オフラインです。この章はまだ端末に保存されていません。" : "音声を読み込めませんでした。もう一度 ▶ を押してください。");
+  });
+  function assign(u){
+    silent = false; au.loop = false; bPlay.classList.remove("wait");
+    au.src = u; au.defaultPlaybackRate = speed; au.playbackRate = speed;
+    try{ au.preservesPitch = true; }catch(e){}
+    if (autoplay) doPlay();
+    prefetchNext(cid);
+  }
+}
+function prefetchNext(cid){
+  for (var i = qi + 1; i < queue.length; i++){ if (queue[i].c !== cid){ PACK.url(queue[i].c).catch(function(){}); return; } }
+  if (repeat && queue.length && queue[0].c !== cid) PACK.url(queue[0].c).catch(function(){});
+}
+function loadSeg(i, t, autoplay){
+  var s = queue[i]; if (!s){ finish(); return; }
+  var target = (t == null) ? s.a : t;
+  if (curCh !== s.c || !au.src || silent){ pendingSeek = target; setSrc(s.c, autoplay); }
+  else { seekTo(target); if (autoplay) doPlay(); }
+  if (follow && shownCh !== s.c) renderChapter(s.c);
+  refreshNow(true);
+}
+function seekTo(t){
+  if (au.readyState >= 1){ try{ au.currentTime = t; }catch(e){ pendingSeek = t; } }
+  else pendingSeek = t;
+}
+function applyPending(){
+  if (silent) return;
+  if (pendingSeek != null && au.readyState >= 1){
+    var t = pendingSeek; pendingSeek = null;
+    if (Math.abs(au.currentTime - t) > 0.25){ try{ au.currentTime = t; }catch(e){ pendingSeek = t; } }
+  }
+}
+au.addEventListener("loadedmetadata", applyPending);
+au.addEventListener("canplay", applyPending);
+au.addEventListener("playing", applyPending);
+au.addEventListener("error", function(){
+  if (silent || !curCh) return;
+  var cid = curCh; errTries[cid] = (errTries[cid] || 0) + 1;
+  if (errTries[cid] > 2){ setPlayingUI(false); toast("この章の音声を再生できませんでした。アプリを開き直してください。"); return; }
+  PACK.drop(cid);
+  if (pendingSeek == null) pendingSeek = au.currentTime || (queue[qi] ? queue[qi].a : 0);
+  setSrc(cid, playing);
+});
+
+function doPlay(){
+  var p = au.play();
+  if (p && p.catch) p.catch(function(err){
+    if (err && err.name === "NotAllowedError"){ setPlayingUI(false); toast("▶ を押すと再生が始まります"); }
+  });
+}
+function finish(){
+  au.pause(); setPlayingUI(false);
+  toast("「" + (range ? rangeLabel(range) : "") + "」を最後まで再生しました");
+  qi = Math.max(0, queue.length - 1);
+}
+function next(){
+  if (advancedFor === qi) return; advancedFor = qi;
+  var prev = queue[qi];
+  qi++;
+  if (qi >= queue.length){
+    if (repeat && queue.length){ qi = 0; advancedFor = -1; loadSeg(0, null, true); return; }
+    finish(); return;
+  }
+  var s = queue[qi];
+  if (sleepCh && prev && s.c !== prev.c){ sleepCh = null; $("sleep").value = "0"; au.pause(); setPlayingUI(false); toast("おやすみタイマー：章の終わりで停止しました"); loadSeg(qi, null, false); return; }
+  if (s.c === curCh && !au.paused && Math.abs(au.currentTime - s.a) < 0.35){ advancedFor = -1; refreshNow(true); return; }
+  advancedFor = -1;
+  loadSeg(qi, null, true);
+}
+au.addEventListener("ended", function(){ if (!silent) next(); });
+au.addEventListener("timeupdate", tick);
+au.addEventListener("play", function(){ setPlayingUI(true); });
+au.addEventListener("pause", function(){ setPlayingUI(false); saveState(); renderResume(); });
+au.addEventListener("waiting", function(){ bPlay.classList.add("wait"); });
+au.addEventListener("playing", function(){ bPlay.classList.remove("wait"); });
+au.addEventListener("ratechange", posState);
+
+function tick(){
+  if (silent) return;
+  var t = au.currentTime, s = queue[qi];
+  if (s && s.c === curCh && pendingSeek == null){
+    if (!s.full && t >= s.b - 0.05 && !au.paused) next();
+  }
+  if (sleepAt && Date.now() >= sleepAt){ sleepAt = 0; $("sleep").value = "0"; au.pause(); toast("おやすみタイマーで停止しました"); }
+  refreshNow(false);
+}
+
+/* ---------- position / highlight ---------- */
+function findK(c, t){
+  var f = c.flat, lo = 0, hi = f.length - 1, ans = -1;
+  while (lo <= hi){ var mid = (lo + hi) >> 1; if (f[mid].a <= t + 0.06){ ans = mid; lo = mid + 1; } else hi = mid - 1; }
+  return ans;
+}
+var lastSave = 0;
+function refreshNow(force){
+  if (!curCh) return;
+  var c = CH[curCh], t = pendingSeek != null ? pendingSeek : (au.currentTime || 0);
+  var k = findK(c, t); if (k < 0) k = 0;
+  var u = c.u[c.flat[k] ? c.flat[k].ui : 0];
+  if (force || u !== curUnit){
+    curUnit = u;
+    $("nowA").textContent = c.part.name + " ・ " + chLabel(c);
+    $("nowB").textContent = unitLabel(u);
+    mediaMeta(c, u);
+    markTocCurrent();
+    if (range){ saveState(); renderResume(); }
+  }
+  if (k !== curK || force){ curK = k; highlight(k); }
+  // heard marking
+  if (!au.paused && t >= u.speechEnd - 0.3 && !heard[u.id]){ heard[u.id] = 1; store.set("heard", Object.keys(heard)); updateTocHeard(c.id, u.id); }
+  // progress
+  var dur = c.d;
+  if (!seeking){ seek.max = dur.toFixed(1); seek.value = t.toFixed(1); }
+  $("tCur").textContent = fmt(t); $("tDur").textContent = fmt(dur);
+  posStateThrottled();
+  var now = Date.now(); if (now - lastSave > 5000){ lastSave = now; saveState(); }
+}
+var nowEl = null, follow = true, shownCh = null, autoScrolling = 0;
+function highlight(k){
+  if (shownCh !== curCh){ if (nowEl){ nowEl.classList.remove("now"); nowEl = null; } return; }
+  var el = reader.querySelector('.s[data-k="' + k + '"]');
+  if (el === nowEl) return;
+  if (nowEl) nowEl.classList.remove("now");
+  nowEl = el;
+  if (!el) return;
+  el.classList.add("now");
+  if (el.classList.contains("ans")) el.classList.add("show");
+  if (follow && !document.hidden) scrollToEl(el);
+}
+function scrollToEl(el){
+  var r = el.getBoundingClientRect(), vh = window.innerHeight, dockH = $("dock").offsetHeight;
+  if (r.top < 70 || r.bottom > vh - dockH - 30){
+    autoScrolling = Date.now();
+    var y = window.scrollY + r.top - (vh - dockH) * 0.38;
+    window.scrollTo({top: Math.max(0, y), behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"});
+  }
+}
+function userScrolled(){
+  if (Date.now() - autoScrolling < 900) return;
+  if (!playing || shownCh !== curCh) return;
+  if (follow){ follow = false; $("followBtn").hidden = false; }
+}
+window.addEventListener("wheel", userScrolled, {passive:true});
+window.addEventListener("touchmove", userScrolled, {passive:true});
+$("followBtn").addEventListener("click", function(){
+  follow = true; $("followBtn").hidden = true;
+  if (curCh){ if (shownCh !== curCh) renderChapter(curCh); setView("read"); curK = -1; refreshNow(true); if (nowEl) scrollToEl(nowEl); }
+});
+
+/* ---------- play controls ---------- */
+var speed = parseFloat(store.get("speed", 1)) || 1;
+$("speed").value = String(speed);
+$("speed").addEventListener("change", function(){ speed = parseFloat(this.value); au.playbackRate = speed; store.set("speed", speed); });
+$("sleep").addEventListener("change", function(){
+  var v = this.value; sleepAt = 0; sleepCh = null;
+  if (v === "ch"){ sleepCh = "on"; toast("この章の終わりで停止します"); }
+  else if (+v){ sleepAt = Date.now() + (+v) * 60000; toast(v + "分後に停止します"); }
+});
+function setRepeatUI(){ $("bRepeat").setAttribute("aria-pressed", repeat ? "true" : "false"); }
+$("bRepeat").addEventListener("click", function(){ repeat = !repeat; store.set("repeat", repeat); setRepeatUI(); toast(repeat ? "再生範囲をくり返します" : "くり返しをオフにしました"); });
+setRepeatUI();
+
+var PLAY_PATH = "M8 5v14l11-7z", PAUSE_PATH = "M7 5h3.5v14H7zM13.5 5H17v14h-3.5z";
+function setPlayingUI(on){
+  playing = on;
+  $("icPlay").innerHTML = '<path d="' + (on ? PAUSE_PATH : PLAY_PATH) + '"/>';
+  bPlay.setAttribute("aria-label", on ? "一時停止" : "再生");
+  if ("mediaSession" in navigator){ try{ navigator.mediaSession.playbackState = on ? "playing" : "paused"; }catch(e){} }
+}
+bPlay.addEventListener("click", togglePlay);
+function togglePlay(){
+  if (!queue.length){ startResumeOrBeginning(); return; }
+  if (au.paused){ if (!au.src) loadSeg(qi, null, true); else doPlay(); } else au.pause();
+}
+function jumpTo(cid, t){
+  // inside current queue? then seek within it, else play from here to the end of the book
+  for (var i = 0; i < queue.length; i++){
+    var s = queue[i], end = s.full ? CH[s.c].d : s.b;
+    if (s.c === cid && t >= s.a - 0.01 && t < end){ qi = i; advancedFor = -1; loadSeg(i, t, true); return; }
+  }
+  setQueue({type:"from", c:cid, t:t}, "full", {c:cid, t:t});
+}
+function stepSentence(dir){
+  if (!curCh) return;
+  var c = CH[curCh], t = au.currentTime, k = findK(c, t);
+  if (dir < 0 && k >= 0 && t - c.flat[k].a > 1.2) { jumpTo(curCh, Math.max(0, c.flat[k].a - 0.1)); return; }
+  var nk = k + dir;
+  if (nk < 0){ var pi = ORDER.indexOf(curCh) - 1; if (pi < 0) return; var pc = CH[ORDER[pi]]; jumpTo(pc.id, Math.max(0, pc.flat[pc.flat.length-1].a - 0.1)); return; }
+  if (nk >= c.flat.length){ var ni = ORDER.indexOf(curCh) + 1; if (ni >= ORDER.length) return; jumpTo(ORDER[ni], 0); return; }
+  jumpTo(curCh, Math.max(0, c.flat[nk].a - 0.1));
+}
+function stepUnit(dir){
+  if (!curCh) return;
+  var c = CH[curCh], t = au.currentTime, k = findK(c, t), ui = k >= 0 ? c.flat[k].ui : 0, u = c.u[ui];
+  if (dir < 0 && t - u.a > 3){ jumpTo(curCh, u.a); return; }
+  var nu = ui + dir;
+  if (nu < 0){ var pi = ORDER.indexOf(curCh) - 1; if (pi < 0){ jumpTo(curCh, 0); return; } var pc = CH[ORDER[pi]]; jumpTo(pc.id, pc.u[pc.u.length-1].a); return; }
+  if (nu >= c.u.length){ var ni = ORDER.indexOf(curCh) + 1; if (ni >= ORDER.length) return; jumpTo(ORDER[ni], 0); return; }
+  jumpTo(curCh, c.u[nu].a);
+}
+$("bPrevS").addEventListener("click", function(){ stepSentence(-1); });
+$("bNextS").addEventListener("click", function(){ stepSentence(1); });
+$("bPrevSec").addEventListener("click", function(){ stepUnit(-1); });
+$("bNextSec").addEventListener("click", function(){ stepUnit(1); });
+var seeking = false;
+seek.addEventListener("input", function(){ seeking = true; $("tCur").textContent = fmt(+seek.value); });
+seek.addEventListener("change", function(){ seeking = false; if (curCh) jumpTo(curCh, +seek.value); });
+document.addEventListener("keydown", function(e){
+  if (e.target.closest && e.target.closest("input,select,textarea")) return;
+  if (e.code === "Space"){ e.preventDefault(); togglePlay(); }
+  else if (e.key === "ArrowLeft"){ stepSentence(-1); }
+  else if (e.key === "ArrowRight"){ stepSentence(1); }
+});
+
+/* ---------- Media Session (lock screen / earphone controls) ---------- */
+var artUrl = new URL("icons/icon-512.png", location.href).href;
+function mediaMeta(c, u){
+  if (!("mediaSession" in navigator) || !window.MediaMetadata) return;
+  try{
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: unitLabel(u).replace("　"," "), artist: chLabel(c), album: "スマートテキスト " + c.part.name,
+      artwork: [{src: artUrl, sizes: "512x512", type: "image/png"}]
+    });
+  }catch(e){}
+}
+var lastPos = 0;
+function posStateThrottled(){ var n = Date.now(); if (n - lastPos > 1000){ lastPos = n; posState(); } }
+function posState(){
+  if (!("mediaSession" in navigator) || !navigator.mediaSession.setPositionState || !curCh) return;
+  try{ var d = CH[curCh].d; navigator.mediaSession.setPositionState({duration: d, playbackRate: au.playbackRate || 1, position: Math.min(d, Math.max(0, au.currentTime || 0))}); }catch(e){}
+}
+if ("mediaSession" in navigator){
+  var ms = navigator.mediaSession, H = function(a, f){ try{ ms.setActionHandler(a, f); }catch(e){} };
+  H("play", function(){ if (!queue.length) startResumeOrBeginning(); else doPlay(); });
+  H("pause", function(){ au.pause(); });
+  H("stop", function(){ au.pause(); });
+  H("previoustrack", function(){ stepUnit(-1); });
+  H("nexttrack", function(){ stepUnit(1); });
+  H("seekbackward", function(d){ if (curCh) jumpTo(curCh, Math.max(0, au.currentTime - ((d && d.seekOffset) || 10))); });
+  H("seekforward", function(d){ if (curCh) jumpTo(curCh, Math.min(CH[curCh].d - 0.5, au.currentTime + ((d && d.seekOffset) || 10))); });
+  H("seekto", function(d){ if (curCh && d && d.seekTime != null) jumpTo(curCh, d.seekTime); });
+}
+
+/* ---------- save / resume ---------- */
+function saveState(){
+  if (!curCh || !range) return;
+  var c = CH[curCh], t = pendingSeek != null ? pendingSeek : (au.currentTime || 0), k = findK(c, t);
+  var floor = k >= 0 ? c.u[c.flat[k].ui].a : 0;
+  store.set("pos", {range: range, mode: qmode, c: curCh, t: Math.max(floor, t - 1.5), at: Date.now()});
+}
+window.addEventListener("pagehide", saveState);
+document.addEventListener("visibilitychange", function(){ if (document.hidden) saveState(); else if (curCh){ curK = -1; refreshNow(true); } });
+function startResumeOrBeginning(){
+  var p = store.get("pos", null);
+  if (p && CH[p.c]) setQueue(p.range, p.mode, {c:p.c, t:p.t});
+  else setQueue({type:"all"}, "full");
+}
+function renderResume(){
+  var box = $("resume"), p = store.get("pos", null);
+  var html = "";
+  if (p && CH[p.c]){
+    var c = CH[p.c], k = findK(c, p.t + 0.5), u = c.u[k >= 0 ? c.flat[k].ui : 0];
+    html += '<button class="btn primary" id="bResume">' + ICON_PLAY + '<span>続きから再生<br><span class="sub">' + esc(chLabel(c)) + " ・ " + esc(unitLabel(u)) + "</span></span></button>";
+  }
+  html += '<button class="btn" id="bAll">' + ICON_PLAY + "<span>最初から全部再生</span></button>";
+  box.innerHTML = html;
+  var r = $("bResume"); if (r) r.onclick = function(){ var p2 = store.get("pos", null); setQueue(p2.range, p2.mode, {c:p2.c, t:p2.t}); setView("read"); };
+  $("bAll").onclick = function(){ setQueue({type:"all"}, "full"); setView("read"); };
+}
+var ICON_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+
+/* ---------- table of contents ---------- */
+var openCh = store.get("openCh", null);
+function renderToc(){
+  var h = "";
+  PARTS.forEach(function(p){
+    var pd = p.c.reduce(function(a, cid){ return a + CH[cid].d; }, 0);
+    h += '<section class="part"><div class="part-h"><h2>第' + p.id + "部 " + esc(p.name) + '</h2><span class="dur">' + fmtLong(pd) +
+      '</span><button class="play-ic" data-play="part" data-id="' + p.id + '" aria-label="第' + p.id + "部 " + esc(p.name) + 'を再生">' + ICON_PLAY + "</button></div>";
+    p.c.forEach(function(cid){
+      var c = CH[cid];
+      h += '<div class="chap" id="toc-' + cid + '"><div class="chap-row"><button class="chap-open" data-open="' + cid + '" aria-expanded="' + (openCh === cid) + '"><span class="chap-no">第' + c.n + '章</span><span><span class="chap-t">' + esc(c.t) + '</span> <span class="prog" id="prog-' + cid + '"></span></span></button>' +
+        '<span class="dur">' + fmt(c.d) + '</span><button class="play-ic" data-play="ch" data-id="' + cid + '" aria-label="' + esc(chLabel(c)) + 'を再生">' + ICON_PLAY + "</button></div>" +
+        '<ul class="units" id="units-' + cid + '"' + (openCh === cid ? "" : " hidden") + ">";
+      c.u.forEach(function(u, ui){
+        h += '<li><button class="unit-b' + (u.k === "minitest" ? " mt" : "") + '" data-goto="' + cid + '" data-u="' + ui + '" id="tu-' + u.id + '"><span class="chk">' + (heard[u.id] ? "✓" : "") + "</span><span>" + esc(unitLabel(u)) + '</span></button><span class="dur">' + fmt(u.b - u.a) +
+          '</span><button class="mini-play" data-play="unit" data-id="' + cid + '" data-u="' + ui + '" aria-label="' + esc(unitLabel(u)) + 'を再生">' + ICON_PLAY + "</button></li>";
+      });
+      h += "</ul></div>";
+    });
+    h += "</section>";
+  });
+  h += '<p class="credit">音声：VOICEVOX:No.7（読み上げ用に自動生成）。表や図は、聞いて分かるように文章で説明しています。本文と音声は暗号化して保存しています。</p>';
+  tocBody.innerHTML = h;
+  ORDER.forEach(function(cid){ updateTocHeard(cid); });
+}
+function updateTocHeard(cid, uid){
+  var c = CH[cid], n = 0;
+  c.u.forEach(function(u){ if (heard[u.id]) n++; });
+  var el = $("prog-" + cid); if (el){ el.textContent = n ? (n === c.u.length ? "✓ 聞き終わり" : n + "/" + c.u.length) : ""; el.classList.toggle("done", n === c.u.length); }
+  if (uid){ var b = $("tu-" + uid); if (b) b.querySelector(".chk").textContent = "✓"; }
+}
+function markTocCurrent(){
+  [].forEach.call(document.querySelectorAll(".chap.cur"), function(e){ e.classList.remove("cur"); });
+  [].forEach.call(document.querySelectorAll(".unit-b.cur"), function(e){ e.classList.remove("cur"); });
+  if (!curCh) return;
+  var ce = $("toc-" + curCh); if (ce) ce.classList.add("cur");
+  if (curUnit){ var ue = $("tu-" + curUnit.id); if (ue) ue.classList.add("cur"); }
+}
+tocBody.addEventListener("click", function(e){
+  var b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.play){
+    var r = b.dataset.play === "part" ? {type:"part", id:b.dataset.id} : b.dataset.play === "ch" ? {type:"ch", id:b.dataset.id} : {type:"unit", c:b.dataset.id, u:+b.dataset.u};
+    follow = true; $("followBtn").hidden = true;
+    setQueue(r, mode); setView("read");
+  } else if (b.dataset.open){
+    var cid = b.dataset.open, ul = $("units-" + cid), open = ul.hidden;
+    ul.hidden = !open; b.setAttribute("aria-expanded", open ? "true" : "false");
+    openCh = open ? cid : null; store.set("openCh", openCh);
+  } else if (b.dataset.goto){
+    var cid2 = b.dataset.goto, u = CH[cid2].u[+b.dataset.u];
+    if (curCh !== cid2 || !playing) follow = false;
+    renderChapter(cid2); setView("read");
+    var el = $("u-" + u.id); if (el) el.scrollIntoView({block:"start"});
+    if (playing && curCh !== cid2){ $("followBtn").hidden = false; }
+  }
+});
+
+/* ---------- reader ---------- */
+var HIT_IC = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 3h2v18H5zM8 4h11l-2.5 4L19 12H8z"/></svg>';
+function sentSpan(s, k){ return '<span class="s" data-k="' + k + '">' + rich(s[0]) + "</span>"; }
+function renderChapter(cid){
+  var c = CH[cid]; shownCh = cid; nowEl = null; curK = -1;
+  var h = '<header class="ch-head"><div class="eyebrow"><span>第' + c.part.id + "部 " + esc(c.part.name) + "</span><span>" + fmt(c.d) + "</span></div>";
+  var k = 0, titleK = -1;
+  // chapter title sentence is the first sentence of the intro unit
+  var intro = c.u[0];
+  h += '<h2 class="ch-title"><span class="s" data-k="0">第' + c.n + "章　" + esc(c.t) + "</span></h2>";
+  h += '<div class="ch-actions"><button class="btn primary" data-act="ch">' + ICON_PLAY + 'この章を再生</button><button class="btn" data-act="key">要点だけ</button><button class="btn" data-act="test">ミニテストだけ</button></div></header>';
+  c.u.forEach(function(u){
+    h += '<section class="unit" id="u-' + u.id + '">';
+    var open = null; // current grouping
+    function close(){ if (open){ h += open.end; open = null; } }
+    function group(kind, start, end){ if (!open || open.kind !== kind){ close(); h += start; open = {kind:kind, end:end}; } }
+    u.B.forEach(function(b){
+      var t = b[0], ex = b[1] || {}, ss = b[2], inner = "";
+      var spans = ss.map(function(s){ var out = s[3] ? null : sentSpan(s, k); k++; return out; });
+      var body = spans.filter(Boolean).join("");
+      if (t === "chtitle"){ return; }
+      if (t === "pointhead"){ close(); h += '<div class="points"><div class="lab">' + body + '</div><ol>'; open = {kind:"points", end:"</ol></div>"}; return; }
+      if (t === "point"){ group("points", '<div class="points"><ol>', "</ol></div>"); h += "<li>" + body + "</li>"; return; }
+      if (t === "boxhead"){ close(); h += '<aside class="hit"><div class="lab">' + HIT_IC + body + "</div><ul>"; open = {kind:"hit", end:"</ul></aside>"}; return; }
+      if (t === "box"){ group("hit", '<aside class="hit"><ul>', "</ul></aside>"); h += "<li>" + body + "</li>"; return; }
+      if (t === "li"){ group("lst", '<ul class="lst">', "</ul>"); h += "<li>" + body + "</li>"; return; }
+      if (t === "term"){
+        group("terms", '<dl class="terms">', "</dl>");
+        h += '<div class="term"><dt><span class="lb">' + esc(ex.label || "") + "</span>" + esc(ex.word || "") + "</dt><dd>" + body + "</dd></div>"; return;
+      }
+      if (t === "q"){
+        close();
+        var ansK = k - 1, ans = ex.ans;
+        h += '<div class="q"><span class="qn">問' + ex.n + "</span><span>" + body + '</span><span class="ans s ' + (ans === "○" ? "o" : "x") + '" data-k="' + ansK + '" role="button" tabindex="0" aria-label="正解を表示">正解 <span class="mk2">' + (ans === "○" ? "○" : "×") + "</span></span></div>";
+        return;
+      }
+      close();
+      if (t === "sectitle") h += '<h2><span class="num">' + ex.no + '</span><span>' + spans.join("").replace(/^(<span class="s" data-k="\d+">)\d+\s*/, "$1") + "</span></h2>";
+      else if (t === "mttitle") h += "<h2>" + body + "</h2>";
+      else if (t === "h") h += "<h3>" + body + "</h3>";
+      else if (t === "case") h += '<div class="tag case">' + body + "</div>";
+      else if (t === "conc") h += '<div class="tag conc">' + body + "</div>";
+      else if (t === "fig") h += '<div class="fig">' + body + "</div>";
+      else h += "<p>" + body + "</p>";
+    });
+    close();
+    h += "</section>";
+  });
+  var i = ORDER.indexOf(cid), pv = ORDER[i-1], nx = ORDER[i+1];
+  h += '<nav class="ch-nav">' + (pv ? '<button class="btn" data-ch="' + pv + '">← ' + esc(chLabel(CH[pv])) + "</button>" : "<span></span>") + (nx ? '<button class="btn" data-ch="' + nx + '">' + esc(chLabel(CH[nx])) + " →</button>" : "") + "</nav>";
+  reader.innerHTML = h;
+  if (curCh === cid){ curK = -1; refreshNow(true); }
+}
+reader.addEventListener("click", function(e){
+  var a = e.target.closest("[data-act]");
+  if (a){ follow = true; $("followBtn").hidden = true; setQueue({type:"ch", id:shownCh}, a.dataset.act === "ch" ? "full" : a.dataset.act); return; }
+  var n = e.target.closest("[data-ch]");
+  if (n){ follow = false; renderChapter(n.dataset.ch); window.scrollTo({top:0}); if (playing && curCh !== shownCh) $("followBtn").hidden = false; return; }
+  var s = e.target.closest(".s");
+  if (s){
+    if (s.classList.contains("ans") && !s.classList.contains("show")){ s.classList.add("show"); return; }
+    var c = CH[shownCh], f = c.flat[+s.dataset.k];
+    if (f){ follow = true; $("followBtn").hidden = true; jumpTo(shownCh, Math.max(0, f.a - 0.1)); }
+  }
+});
+reader.addEventListener("keydown", function(e){ if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("ans")){ e.preventDefault(); e.target.classList.add("show"); } });
+
+/* ---------- views (phone) ---------- */
+function setView(v){
+  document.body.dataset.view = v;
+  $("tab-toc").setAttribute("aria-selected", v === "toc" ? "true" : "false");
+  $("tab-read").setAttribute("aria-selected", v === "read" ? "true" : "false");
+  if (v === "read" && matchMedia("(max-width: 899px)").matches){ if (nowEl) setTimeout(function(){ scrollToEl(nowEl); }, 60); }
+}
+$("tab-toc").addEventListener("click", function(){ setView("toc"); window.scrollTo({top:0}); });
+$("tab-read").addEventListener("click", function(){ setView("read"); });
+
+/* ---------- dock height → page padding ---------- */
+function syncDock(){ document.documentElement.style.setProperty("--dock-h", $("dock").offsetHeight + "px"); }
+if (window.ResizeObserver) new ResizeObserver(syncDock).observe($("dock")); else window.addEventListener("resize", syncDock);
+syncDock();
+
+/* ---------- boot ---------- */
+var nSent = ORDER.reduce(function(a, cid){ return a + CH[cid].flat.length; }, 0);
+$("meta").textContent = PARTS.length + "部・全" + ORDER.length + "章・ミニテスト" + DATA.nTests + "回 ・ 全部で約" + fmtLong(TOTAL);
+setModeUI(); renderToc(); renderResume();
+var p0 = store.get("pos", null);
+renderChapter(p0 && CH[p0.c] ? p0.c : ORDER[0]);
+setView(p0 ? "read" : "toc");
+if (p0 && CH[p0.c]){
+  // show where the listener left off without auto-playing
+  var c0 = CH[p0.c], k0 = findK(c0, p0.t + 0.5); curCh = null;
+  var el0 = reader.querySelector('.s[data-k="' + Math.max(0,k0) + '"]'); if (el0) setTimeout(function(){ el0.classList.add("now"); nowEl = el0; scrollToEl(el0); }, 80);
+}
+window.__player = {queue: function(){ return queue; }, qi: function(){ return qi; }};
+}
+</script>
+<script>
+/* ---- app shell: unlock, decrypt, install, offline ---- */
+var META = null, KEY = null, deferredPrompt = null;
+var APP_VERSION = "2026.10.15-1";
+var PACK_CACHE = "stx-pack-v1";
+function $$(id){ return document.getElementById(id); }
+function b64(s){ var bin = atob(s), u = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
+async function derive(pass){
+  var base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({name: "PBKDF2", salt: b64(META.salt), iterations: META.iter, hash: "SHA-256"},
+    base, {name: "AES-GCM", length: 256}, false, ["decrypt"]);
+}
+async function dec(buf, key){
+  var u = new Uint8Array(buf);
+  return crypto.subtle.decrypt({name: "AES-GCM", iv: u.slice(0, 12)}, key || KEY, u.slice(12));
+}
+function shellToast(msg){
+  var el = document.querySelector(".toast");
+  if (!el){ el = document.createElement("div"); el.className = "toast"; el.setAttribute("role", "status"); document.body.appendChild(el); }
+  el.textContent = msg; el.hidden = false; clearTimeout(shellToast.t); shellToast.t = setTimeout(function(){ el.hidden = true; }, 3600);
+}
+
+/* the decryption key stays on this device (IndexedDB) so the passphrase is asked only once */
+function idb(){
+  return new Promise(function(res, rej){
+    var r = indexedDB.open("stx26", 1);
+    r.onupgradeneeded = function(){ r.result.createObjectStore("k"); };
+    r.onsuccess = function(){ res(r.result); }; r.onerror = function(){ rej(r.error); };
+  });
+}
+async function saveKey(k){
+  try{
+    var db = await idb();
+    await new Promise(function(res, rej){ var tx = db.transaction("k", "readwrite"); tx.objectStore("k").put(k, "key"); tx.oncomplete = res; tx.onerror = function(){ rej(tx.error); }; });
+    return true;
+  }catch(e){ return false; }
+}
+async function loadKey(){
+  try{
+    var db = await idb();
+    return await new Promise(function(res){ var tx = db.transaction("k"); var r = tx.objectStore("k").get("key"); r.onsuccess = function(){ res(r.result || null); }; r.onerror = function(){ res(null); }; });
+  }catch(e){ return null; }
+}
+async function fetchData(key){
+  var r = await fetch("a/data.bin", {cache: "no-cache"});
+  if (!r.ok) throw new TypeError("http " + r.status);
+  var plain = await dec(await r.arrayBuffer(), key);
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+
+/* decrypted chapter audio, kept as a few blob URLs */
+var PACK = (function(){
+  var urls = {}, inflight = {}, order = [];
+  function touch(cid){
+    order = order.filter(function(x){ return x !== cid; }); order.push(cid);
+    while (order.length > 3){ var old = order.shift(); if (urls[old]){ URL.revokeObjectURL(urls[old]); delete urls[old]; } }
+  }
+  return {
+    ready: function(cid){ if (urls[cid]){ touch(cid); return urls[cid]; } return null; },
+    url: function(cid){
+      if (urls[cid]){ touch(cid); return Promise.resolve(urls[cid]); }
+      if (inflight[cid]) return inflight[cid];
+      var p = fetch("a/" + cid + ".bin").then(function(r){ if (!r.ok) throw new Error("http " + r.status); return r.arrayBuffer(); })
+        .then(function(buf){ return dec(buf); })
+        .then(function(plain){ var u = URL.createObjectURL(new Blob([plain], {type: "audio/mpeg"})); urls[cid] = u; touch(cid); delete inflight[cid]; return u; })
+        .catch(function(e){ delete inflight[cid]; throw e; });
+      inflight[cid] = p; return p;
+    },
+    drop: function(cid){ if (urls[cid]){ URL.revokeObjectURL(urls[cid]); delete urls[cid]; } order = order.filter(function(x){ return x !== cid; }); }
+  };
+})();
+
+function showForm(msg){
+  $$("lockMsg").textContent = msg; $$("lockForm").hidden = false;
+  setTimeout(function(){ try{ $$("pass").focus(); }catch(e){} }, 60);
+}
+function openApp(d){
+  $$("lock").hidden = true; $$("app").hidden = false;
+  boot(d);
+  setupPwaBar();
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function(){});
+}
+$$("lockForm").addEventListener("submit", async function(e){
+  e.preventDefault();
+  var pass = $$("pass").value.normalize("NFKC").trim().toLowerCase().replace(/\s+/g, ""); if (!pass) return;
+  $$("lockBtn").disabled = true; $$("lockErr").hidden = true; $$("lockMsg").textContent = "確認しています…";
+  try{
+    var k = await derive(pass); var d = await fetchData(k); KEY = k;
+    var saved = await saveKey(k);
+    if (!saved){ try{ localStorage.setItem("stx26:pass", pass); }catch(e2){} }
+    openApp(d);
+  }catch(err){
+    $$("lockMsg").textContent = "合言葉を入力してください。";
+    var el = $$("lockErr"); el.hidden = false;
+    el.textContent = (err && err.name === "OperationError") ? "合言葉が違います。もう一度入力してください。" : "開けませんでした。通信状況を確認して、もう一度お試しください。";
+  }finally{ $$("lockBtn").disabled = false; }
+});
+
+/* install + offline bar */
+window.addEventListener("beforeinstallprompt", function(e){ e.preventDefault(); deferredPrompt = e; var b = $$("bInstall"); if (b) b.hidden = false; });
+window.addEventListener("appinstalled", function(){ var b = $$("bInstall"); if (b) b.hidden = true; deferredPrompt = null; });
+function mb(n){ return Math.round(n / 1e6) + "MB"; }
+function isStandalone(){ return (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true; }
+function setupPwaBar(){
+  var bar = $$("pwaBar"); if (!bar) return;
+  var isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  var h = "";
+  if (!isStandalone()){
+    if (isIOS) h += '<span class="hint">アプリとして使うには：Safariの共有ボタン（□に↑）→「ホーム画面に追加」</span>';
+    else h += '<button class="btn" id="bInstall"' + (deferredPrompt ? "" : " hidden") + '>アプリとしてインストール</button>';
+  }
+  if ("caches" in window) h += '<button class="btn" id="bOffline">オフライン用に全部保存（' + mb(META.total) + '）</button><span class="ok" id="offState"></span>';
+  bar.innerHTML = h;
+  var bi = $$("bInstall");
+  if (bi) bi.addEventListener("click", async function(){
+    if (!deferredPrompt){ shellToast("ブラウザのメニューから「アプリをインストール」または「ホーム画面に追加」を選んでください"); return; }
+    deferredPrompt.prompt(); try{ await deferredPrompt.userChoice; }catch(e){} deferredPrompt = null; bi.hidden = true;
+  });
+  var bo = $$("bOffline"); if (bo) bo.addEventListener("click", saveOffline);
+  checkOffline();
+}
+function packUrl(id){ return new URL("a/" + id + ".bin", location.href).href; }
+async function checkOffline(){
+  try{
+    var c = await caches.open(PACK_CACHE), n = 0;
+    for (var i = 0; i < META.files.length; i++){ if (await c.match(packUrl(META.files[i].id))) n++; }
+    setOffState(n);
+  }catch(e){}
+}
+function setOffState(n){
+  var all = META.files.length, b = $$("bOffline"), s = $$("offState"); if (!b || !s) return;
+  if (n >= all){ b.hidden = true; s.textContent = "✓ 全" + all + "章を保存済み。電波がなくても再生できます"; }
+  else if (n > 0){ s.textContent = n + "/" + all + "章を保存済み"; }
+}
+var savingOffline = false;
+async function saveOffline(){
+  if (savingOffline) return; savingOffline = true;
+  var b = $$("bOffline"); b.disabled = true;
+  try{
+    var c = await caches.open(PACK_CACHE), bytes = 0, n = 0;
+    for (var i = 0; i < META.files.length; i++){
+      var f = META.files[i], u = packUrl(f.id);
+      if (!(await c.match(u))){
+        var r = await fetch(u, {cache: "no-store"});
+        if (!r.ok) throw new Error("http " + r.status);
+        await c.put(u, r);
+      }
+      n++; bytes += f.size;
+      b.textContent = "保存しています… " + Math.round(bytes / META.total * 100) + "%";
+    }
+    setOffState(n); shellToast("全章を保存しました。電波がなくても再生できます");
+  }catch(e){
+    b.disabled = false; b.textContent = "続きを保存する";
+    shellToast("保存が途中で止まりました。Wi-Fiにつないで、もう一度押してください。");
+    checkOffline();
+  }finally{ savingOffline = false; }
+}
+
+/* start */
+(async function(){
+  if ("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(function(){}); }
+  try{ var r = await fetch("a/meta.json", {cache: "no-cache"}); if (!r.ok) throw 0; META = await r.json(); }
+  catch(e){ $$("lockMsg").textContent = "読み込めませんでした。電波の良い場所で、もう一度開いてください。"; return; }
+  var k = await loadKey();
+  if (!k){ var p = null; try{ p = localStorage.getItem("stx26:pass"); }catch(e){} if (p){ try{ k = await derive(p); }catch(e){} } }
+  if (k){ try{ var d = await fetchData(k); KEY = k; openApp(d); return; }catch(e){} }
+  showForm("合言葉を入力してください。この端末では最初の1回だけ必要です。");
+})();
+
+</script>
+</body>
+</html>
