@@ -170,6 +170,7 @@ body{margin:0}
 .ios-steps b{font-weight:700}
 .pt.saved .pt-dur::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:6px;vertical-align:2px}
 .loading .ic.big{opacity:.75}
+.field textarea{font-family:var(--f-num);font-size:11px;line-height:1.5;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);padding:8px;width:100%}
 </style>
 </head>
 <body>
@@ -274,6 +275,10 @@ body{margin:0}
       <div class="row" id="voiceRow" hidden><select id="voiceSel" aria-label="端末の声"></select></div></div>
     <div class="field"><span class="k">音が出ないとき</span>
       <p>再生ボタンを押しても音が出ないときは、いったん一時停止してからもう一度再生してください。それでも鳴らない場合は、Safari（Android は Chrome）でこのページを開くと再生できます。</p></div>
+    <div class="field"><span class="k">動作ログ</span>
+      <div class="row"><button class="chip" id="bLog" type="button">動作ログをコピー</button></div>
+      <p>うまく再生できないときは、コピーした内容を Claude とのチャットに貼り付けてください。止まった原因を調べられます。</p>
+      <textarea id="logBox" rows="6" readonly hidden aria-label="動作ログ"></textarea></div>
     <div class="field"><span class="k">この端末のデータ</span>
       <div class="row"><button class="chip" id="bForget" type="button">合言葉と保存した音声を削除</button></div>
       <p id="forgetNote">削除すると、次に開くときに合言葉が必要になります。</p></div>
@@ -298,6 +303,13 @@ const IOS=/iP(hone|ad|od)/.test(UA)||(navigator.platform==='MacIntel'&&navigator
 const INAPP=/Line\/|FBAN|FBAV|Instagram|Claude/i.test(UA);
 const ANDROID=/Android/i.test(UA);
 const NATIVE=(window.TakkenNative&&typeof window.TakkenNative.getState==='function')?window.TakkenNative:null;
+const LOG=[];
+function logEv(m){ try{ const d=new Date(); LOG.push(d.toTimeString().slice(0,8)+'.'+String(d.getMilliseconds()).padStart(3,'0')+' '+m); if(LOG.length>200) LOG.shift(); }catch(e){} }
+document.addEventListener('visibilitychange',()=>logEv('page '+document.visibilityState));
+document.addEventListener('freeze',()=>logEv('page frozen'));
+document.addEventListener('resume',()=>logEv('page resumed'));
+addEventListener('pagehide',()=>logEv('pagehide'));
+addEventListener('pageshow',e=>logEv('pageshow'+(e.persisted?' (bfcache)':'')));
 function nativeHasPass(){ try{ return !!JSON.parse(NATIVE.getState()).hasPass; }catch(e){ return false; } }
 
 function lsGet(k){ try{ return JSON.parse(localStorage.getItem(k)||'null'); }catch(e){ return null; } }
@@ -419,6 +431,11 @@ function setOpen(i,open,auto){
 
 /* ---------- audio engine ---------- */
 let audio=null, srcFor=null, pendingSeek=0, lastTime=0, loadTok=0, needFresh=false;
+/* On Android/desktop the whole queue plays as ONE uninterrupted MediaSource stream: the audio never stops between
+   items, so the system keeps treating the page as "playing media" while it is in the background. */
+let useMse=!NATIVE&&!IOS&&!!(window.MediaSource&&typeof MediaSource.isTypeSupported==='function'&&MediaSource.isTypeSupported('audio/mpeg'));
+let S=null;
+const plains=new Map(), plainInflight=new Map();
 const blobs=new Map(), inflight=new Map();
 const AEV={};
 function makeAudio(){
@@ -437,7 +454,7 @@ function getBlobUrl(t){
 }
 function prune(keep){ for(const [id,u] of blobs){ if(!keep.has(id)&&srcFor!==id){ URL.revokeObjectURL(u); blobs.delete(id); } } }
 function prefetch(){
-  if(st.cur<0) return; const keep=new Set([tracks[st.cur].id]);
+  if(useMse||st.cur<0) return; const keep=new Set([tracks[st.cur].id]);
   const n=nextIndex(st.cur); if(n!=null){ keep.add(tracks[n].id); getBlobUrl(tracks[n]).catch(()=>{}); }
   prune(keep);
 }
@@ -457,12 +474,110 @@ function doPlay(silent){
   if(!silent){ clearTimeout(wdT); const a=audio, c0=audio.currentTime;
     wdT=setTimeout(()=>{ if(a!==audio||a.paused||srcFor==null) return; if(a.currentTime-c0<0.15&&a.readyState>=2){ needFresh=true; a.pause(); toast('音が出ない場合は、もう一度再生ボタンを押してください'); } },3500); }
 }
+function getPlain(t){
+  if(plains.has(t.id)) return Promise.resolve(plains.get(t.id));
+  if(plainInflight.has(t.id)) return plainInflight.get(t.id);
+  const p=(async()=>{ const r=await fetch(t.url); if(!r.ok) throw new Error('HTTP '+r.status);
+    const plain=await decrypt(await r.arrayBuffer()); plains.set(t.id,plain); setTimeout(()=>checkSaved(t),1200); return plain; })();
+  plainInflight.set(t.id,p); p.then(()=>plainInflight.delete(t.id),()=>plainInflight.delete(t.id)); return p;
+}
+function sbDone(sb){ return new Promise((res,rej)=>{ const off=()=>{ sb.removeEventListener('updateend',ok); sb.removeEventListener('error',ng); };
+  const ok=()=>{ off(); res(); }, ng=()=>{ off(); rej(new Error('SourceBuffer error')); }; sb.addEventListener('updateend',ok); sb.addEventListener('error',ng); }); }
+function mseOp(s,fn){ s.ops=s.ops.then(()=>s.dead?null:fn()).catch(e=>logEv('stream op failed: '+(e&&(e.name+' '+e.message)||e))); return s.ops; }
+function mseSegAt(s,x){ const a=s.segs; for(let k=a.length-1;k>=0;k--){ if(x>=a[k].start-0.05) return a[k]; } return a[0]||null; }
+function mseLocal(){ const s=S; if(!s||!s.cur||srcFor!=='mse') return lastTime; return Math.max(0,audio.currentTime-s.cur.start); }
+function inBuf(x){ const b=audio.buffered; for(let k=0;k<b.length;k++){ if(x>=b.start(k)-0.02&&x<b.end(k)-0.05) return true; } return false; }
+async function mseAppend(s,idx){
+  const t=tracks[idx]; const plain=await getPlain(t); if(s.dead) return;
+  const sb=s.sb; const start=s.segs.length?s.segs[s.segs.length-1].end:0;
+  const put=async()=>{ try{ sb.timestampOffset=start; }catch(e){} sb.appendBuffer(plain); await sbDone(sb); };
+  try{ await put(); }
+  catch(e){ if(e&&e.name==='QuotaExceededError'){ await mseEvict(s,true); await put(); } else throw e; }
+  const end=sb.buffered.length?sb.buffered.end(sb.buffered.length-1):start;
+  s.segs.push({idx,start,end}); s.last=idx; s.endCalled=false; plains.delete(t.id);
+  logEv('queued '+t.id+' '+start.toFixed(1)+'-'+end.toFixed(1));
+}
+async function mseEvict(s,hard){
+  const sb=s.sb; if(!sb.buffered.length||!s.cur) return;
+  const ci=s.segs.indexOf(s.cur); const keepFrom=(!hard&&ci>0)?s.segs[ci-1].start:s.cur.start;
+  const b0=sb.buffered.start(0);
+  if(keepFrom-b0>1){ sb.remove(b0,keepFrom-0.25); await sbDone(sb); s.segs=s.segs.filter(g=>g.end>keepFrom-0.25); }
+}
+async function mseFillOnce(s){
+  for(let guard=0;guard<3&&!s.dead;guard++){
+    const ci=s.cur?s.segs.indexOf(s.cur):0;
+    if(s.segs.length-1>ci) return;                      // the next item is already queued
+    const n=nextIndex(s.last);
+    if(n==null){ if(!s.endCalled&&s.ms.readyState==='open'&&!s.sb.updating){ try{ s.ms.endOfStream(); s.endCalled=true; logEv('end of queue'); }catch(e){} } return; }
+    await mseEvict(s,false); await mseAppend(s,n);
+  }
+}
+function mseFill(){ const s=S; if(s&&!s.dead&&srcFor==='mse') mseOp(s,()=>mseFillOnce(s)); }
+async function mseRequeueOnce(s){
+  const ci=s.cur?s.segs.indexOf(s.cur):-1;
+  if(ci>=0&&ci<s.segs.length-1){ const cut=s.segs[ci].end; s.sb.remove(cut,Infinity); await sbDone(s.sb); s.segs=s.segs.slice(0,ci+1); }
+  if(s.cur){ s.last=s.cur.idx; } s.endCalled=false;
+  if(s.ms.readyState==='ended'){ try{ s.sb.timestampOffset=s.segs.length?s.segs[s.segs.length-1].end:0; }catch(e){} }
+  await mseFillOnce(s);
+}
+function mseRequeue(){ const s=S; if(useMse&&s&&!s.dead&&srcFor==='mse') mseOp(s,()=>mseRequeueOnce(s)); }
+function msePlay(){ applyRate(); const p=audio.play(); if(p&&p.catch) p.catch(e=>{ logEv('play() rejected: '+(e&&e.name)); if(e&&e.name==='AbortError') return; setPlayingUI(false); if(e&&e.name==='NotAllowedError') toast('再生ボタンをもう一度押してください'); }); }
+function mseBuild(i,t0,auto){
+  if(S) S.dead=true;
+  const ms=new MediaSource();
+  const s={ms,sb:null,segs:[],last:-1,cur:null,dead:false,endCalled:false,ops:Promise.resolve()}; S=s;
+  if(!audio) makeAudio();
+  srcFor='mse'; pendingSeek=0; lastTime=t0||0;
+  const url=URL.createObjectURL(ms); audio.src=url; applyRate();
+  if(t0>0){ try{ audio.currentTime=t0; }catch(e){} }
+  setLoading(true); logEv('start stream at '+tracks[i].id+' '+(t0||0).toFixed(1)+'s');
+  if(auto) msePlay();
+  ms.addEventListener('sourceopen',()=>{
+    try{ URL.revokeObjectURL(url); }catch(e){}
+    if(s.dead) return;
+    try{ s.sb=ms.addSourceBuffer('audio/mpeg'); try{ s.sb.mode='sequence'; }catch(e){} }
+    catch(e){ logEv('addSourceBuffer failed: '+e.name); mseGiveUp(i,t0,auto); return; }
+    mseOp(s,async()=>{
+      await mseAppend(s,i); if(s.dead) return;
+      s.cur=s.segs[0]; const x=s.cur.start+Math.max(0,t0||0);
+      if(Math.abs(audio.currentTime-x)>0.3){ try{ audio.currentTime=x; }catch(e){} }
+      setLoading(false); if(auto&&audio.paused) msePlay();
+      await mseFillOnce(s);
+    }).then(()=>{ if(!s.dead&&!s.cur){ setLoading(false); setPlayingUI(false);
+      toast(navigator.onLine===false?'オフラインです。この項目はまだ端末に保存されていません':'音声を読み込めませんでした。通信状態を確認してください'); } });
+  },{once:true});
+}
+function mseGiveUp(i,t0,auto){ logEv('stream engine unavailable, using single files'); useMse=false; if(S) S.dead=true; S=null; srcFor=null; makeAudio(); playTrack(i,t0,auto); }
+function mseGo(i,t0,auto){
+  const s=S;
+  if(s&&!s.dead&&srcFor==='mse'&&!audio.ended){
+    const ci=s.cur?s.segs.indexOf(s.cur):-1;
+    const k=s.segs.findIndex((g,j)=>g.idx===i&&Math.abs(j-ci)<=1&&inBuf(g.start+t0));
+    if(k>=0){ const g=s.segs[k]; s.cur=g; try{ audio.currentTime=g.start+t0; }catch(e){} lastTime=t0; if(auto&&audio.paused) msePlay(); mseFill(); return; }
+  }
+  mseBuild(i,t0,auto);
+}
+function mseTick(){
+  const s=S; if(!s||s.dead||!s.segs.length) return;
+  const x=audio.currentTime; const g=mseSegAt(s,x); if(!g) return;
+  if(g!==s.cur){
+    const had=!!s.cur; s.cur=g;
+    if(had){ logEv('now '+tracks[g.idx].id);
+      if(st.sleepPt){ st.sleepPt=false; $('#sleepSel').value='0'; updateSleepInfo(); audio.pause(); try{ audio.currentTime=g.start; }catch(e){} toast('スリープタイマーで停止しました'); } }
+    if(g.idx!==st.cur){ const p=st.cur; st.cur=g.idx; st.sent=-1; trackChanged(p,true); setMeta(tracks[g.idx]); }
+    mseFill();
+  }
+  const local=Math.max(0,x-g.start), dur=Math.max(0.1,g.end-g.start);
+  lastTime=local; updateProgress(local,dur); setSent(sentAt(tracks[g.idx],local)); savePos(false); checkSleep();
+  const now=Date.now(); if(now-lastPS>1500){ lastPS=now; posState(); }
+}
 function playTrack(i,t0,auto){
   if(t0==null) t0=0; if(auto==null) auto=true;
   const t=tracks[i]; if(!t) return;
   const prev=st.cur, changed=prev!==i; st.cur=i; if(changed) st.sent=-1;
   if(NATIVE){ trackChanged(prev,changed); sendQueue(); NATIVE.play(i,t0); savePos(true); nativeKick(); return; }
   if(st.mode==='speech'){ trackChanged(prev,changed); speechStart(i,sentAt(t,t0),true); return; }
+  if(useMse){ mseGo(i,t0,auto); trackChanged(prev,changed); setMeta(t); savePos(true); return; }
   if(needFresh||!audio){ needFresh=false; makeAudio(); }
   const tok=++loadTok; const ready=blobs.get(t.id);
   if(ready){ if(srcFor!==t.id) setSrc(ready,t,t0); else seekTo(t0); if(auto) doPlay(false); }
@@ -475,7 +590,7 @@ function playTrack(i,t0,auto){
   }
   trackChanged(prev,changed); setMeta(t); prefetch(); savePos(true);
 }
-function seekTo(x){ lastTime=x; if(srcFor==null||audio.readyState<1){ pendingSeek=x; return; } try{ audio.currentTime=x; }catch(e){ pendingSeek=x; } posState(); }
+function seekTo(x){ if(srcFor==='mse'){ const s=S; if(!s||!s.cur) return; const d=s.cur.end-s.cur.start; const v=Math.max(0,Math.min(d-0.3,x)); try{ audio.currentTime=s.cur.start+v; }catch(e){} lastTime=v; posState(); return; } lastTime=x; if(srcFor==null||audio.readyState<1){ pendingSeek=x; return; } try{ audio.currentTime=x; }catch(e){ pendingSeek=x; } posState(); }
 function trackChanged(prev,changed){
   if(changed&&prev>=0){ liOf(prev).classList.remove('playing','live'); liOf(prev).querySelector('.pt-play').innerHTML=playSvg; if(autoOpened.has(prev)) setOpen(prev,false); const old=textOf(prev).querySelector('.s.now'); if(old) old.classList.remove('now'); }
   const li=liOf(st.cur); li.classList.add('playing');
@@ -483,25 +598,31 @@ function trackChanged(prev,changed){
   updateNow(); if(changed&&st.follow&&!userActive()) scrollToEl(li,'start');
 }
 AEV.loadedmetadata=e=>{ if(!real(e)) return; applyRate(); const x=pendingSeek; pendingSeek=0; if(x>0){ try{ audio.currentTime=x; }catch(er){} } updateProgress(); };
-AEV.play=e=>{ if(!real(e)) return; applyRate(); setPlayingUI(true); };
+AEV.play=e=>{ logEv('event play'); if(!real(e)) return; applyRate(); setPlayingUI(true); };
 AEV.playing=e=>{ if(!real(e)) return; setPlayingUI(true); };
-AEV.pause=e=>{ if(!real(e)||st.mode!=='audio') return; setPlayingUI(false); savePos(true); };
+AEV.pause=e=>{ logEv('event pause'+(document.visibilityState==='hidden'?' (in background)':'')); if(!real(e)||st.mode!=='audio') return; setPlayingUI(false); savePos(true); };
 AEV.ended=e=>{
+  logEv('event ended');
   if(!real(e)||st.mode!=='audio') return;
+  if(srcFor==='mse'){ setPlayingUI(false); savePos(true); toast(st.scope==='point'?'この項目の再生が終わりました':st.scope==='chapter'?'この章の再生が終わりました':'最後まで再生しました'); return; }
   if(st.sleepPt){ st.sleepPt=false; $('#sleepSel').value='0'; updateSleepInfo(); setPlayingUI(false); toast('スリープタイマーで停止しました'); return; }
   const n=nextIndex(st.cur);
   if(n==null){ setPlayingUI(false); savePos(true); toast(st.scope==='point'?'この項目の再生が終わりました':st.scope==='chapter'?'この章の再生が終わりました':'最後まで再生しました'); return; }
   playTrack(n,0,true);
 };
-AEV.error=e=>{ if(!real(e)) return; const t=tracks[st.cur]; blobs.delete(t.id); srcFor=null; setPlayingUI(false); toast('音声を再生できませんでした。もう一度再生ボタンを押してください'); };
+AEV.error=e=>{ logEv('event error '+(audio.error?audio.error.code+' '+(audio.error.message||''):'')); if(!real(e)) return; if(srcFor==='mse'){ mseGiveUp(st.cur,lastTime,true); return; } const t=tracks[st.cur]; blobs.delete(t.id); srcFor=null; setPlayingUI(false); toast('音声を再生できませんでした。もう一度再生ボタンを押してください'); };
 let lastSave=0, lastPS=0;
+AEV.waiting=e=>{ if(e.target!==audio) return; logEv('event waiting'); if(srcFor==='mse') mseFill(); };
+AEV.stalled=e=>{ if(e.target===audio) logEv('event stalled'); };
 AEV.timeupdate=e=>{
-  if(!real(e)||st.mode!=='audio') return; const t=tracks[st.cur]; if(!t) return;
+  if(!real(e)||st.mode!=='audio') return;
+  if(srcFor==='mse'){ mseTick(); return; } const t=tracks[st.cur]; if(!t) return;
   lastTime=audio.currentTime; updateProgress(); setSent(sentAt(t,lastTime)); savePos(false); checkSleep();
   const now=Date.now(); if(now-lastPS>1500){ lastPS=now; posState(); }
 };
 AEV.ratechange=e=>{ if(real(e)) posState(); };
 makeAudio();
+logEv('engine: '+(NATIVE?'native':useMse?'stream':'files'));
 
 function sentAt(t,x){ const a=t.sents; let lo=0,hi=a.length-1,r=-1; while(lo<=hi){ const m=(lo+hi)>>1; if(a[m].t<=x+0.08){ r=m; lo=m+1; } else hi=m-1; } return r; }
 
@@ -541,17 +662,23 @@ function isPlaying(){ if(NATIVE) return !!(nstate.playing||nstate.loading); retu
 function toggle(){
   if(NATIVE&&st.cur>=0){ sendQueue(); NATIVE.toggle(); nativeKick(); return; }
   if(st.cur<0){ const p=lsGet(LS_POS); if(p&&byId[p.id]) playTrack(byId[p.id].idx,p.t); else playTrack(0,0); return; }
+  if(st.mode==='audio'&&useMse){
+    if(srcFor==='mse'&&S&&!S.dead&&!audio.ended){ if(audio.paused) msePlay(); else audio.pause(); }
+    else playTrack(st.cur,(audio.ended||lastTime>=tracks[st.cur].dur-1)?0:lastTime,true);
+    return;
+  }
   if(st.mode==='audio'){
     if(audio.paused||srcFor==null){ if(needFresh||srcFor!==tracks[st.cur].id){ playTrack(st.cur,lastTime,true); return; } applyRate(); doPlay(false); }
     else audio.pause();
   } else { if(spk.on) speechStop(); else speechStart(st.cur,Math.max(st.sent,0),st.sent<0); }
 }
 function pause(){ if(NATIVE){ NATIVE.pause(); nativeKick(); return; } if(st.mode==='audio'){ loadTok++; setLoading(false); try{ audio.pause(); }catch(e){} setPlayingUI(false); } else speechStop(); }
-function skip(d){ if(st.cur<0) return; if(NATIVE){ NATIVE.seek(Math.max(0,(nstate.pos||0)+d)); nativeKick(); return; }
+function skip(dd){ const d=dd; if(st.cur<0) return; if(NATIVE){ NATIVE.seek(Math.max(0,(nstate.pos||0)+d)); nativeKick(); return; }
+  if(st.mode==='audio'&&srcFor==='mse'){ const s=S; if(!s||!s.cur) return; const d=s.cur.end-s.cur.start; seekTo(Math.max(0,Math.min(d-0.4,mseLocal()+dd))); updateProgress(lastTime,d); return; }
   if(st.mode==='audio'){ const dur=isFinite(audio.duration)&&audio.duration>0?audio.duration:tracks[st.cur].dur; seekTo(Math.max(0,Math.min(dur-0.5,(srcFor?audio.currentTime:lastTime)+d))); updateProgress(); }
   else { const t=tracks[st.cur]; const cur=t.sents[Math.max(st.sent,0)]; const k=sentAt(t,(cur?cur.t:0)+d); speechStart(st.cur,Math.max(0,k),false); } }
 function next(){ if(st.cur<0){ playTrack(0); return; } if(NATIVE){ NATIVE.next(); nativeKick(); return; } if(st.cur+1<tracks.length) playTrack(st.cur+1,0,true); }
-function prev(){ if(st.cur<0) return; if(NATIVE){ NATIVE.prev(); nativeKick(); return; } const tcur=st.mode==='audio'?(srcFor?audio.currentTime:0):((tracks[st.cur].sents[st.sent]||{t:0}).t);
+function prev(){ if(st.cur<0) return; if(NATIVE){ NATIVE.prev(); nativeKick(); return; } const tcur=st.mode==='audio'?(srcFor==='mse'?mseLocal():srcFor?audio.currentTime:0):((tracks[st.cur].sents[st.sent]||{t:0}).t);
   if(tcur>3||st.cur===0) playTrack(st.cur,0,true); else playTrack(st.cur-1,0,true); }
 
 /* ---------- UI updates ---------- */
@@ -577,8 +704,8 @@ function updateNow(){
 let dragging=false; const seek=$('#seek');
 function updateProgress(x,dd){
   const t=tracks[st.cur]; if(!t) return;
-  const d=dd>0?dd:((st.mode==='audio'&&srcFor&&isFinite(audio.duration)&&audio.duration>0)?audio.duration:t.dur);
-  const c=x!=null?x:(st.mode==='audio'?(srcFor?audio.currentTime:lastTime):0);
+  const d=dd>0?dd:(srcFor==='mse'&&S&&S.cur?S.cur.end-S.cur.start:(st.mode==='audio'&&srcFor&&isFinite(audio.duration)&&audio.duration>0)?audio.duration:t.dur);
+  const c=x!=null?x:(st.mode==='audio'?(srcFor==='mse'?mseLocal():srcFor?audio.currentTime:lastTime):0);
   seek.max=String(d); if(!dragging) seek.value=String(c);
   $('#tCur').textContent=fmt(dragging?+seek.value:c); $('#tDur').textContent=fmt(d);
 }
@@ -594,7 +721,7 @@ function setSent(k){
   el.classList.add('now'); if(st.follow&&!userActive()) scrollToEl(el,'center');
 }
 function savePos(force){ const now=Date.now(); if(!force&&now-lastSave<4000) return; lastSave=now; if(st.cur<0) return;
-  const t=tracks[st.cur]; const x=st.mode==='audio'?(srcFor?audio.currentTime:lastTime):((t.sents[Math.max(st.sent,0)]||{t:0}).t); lsSet(LS_POS,{id:t.id,t:Math.max(0,x-1)}); }
+  const t=tracks[st.cur]; const x=st.mode==='audio'?(srcFor==='mse'?mseLocal():srcFor?audio.currentTime:lastTime):((t.sents[Math.max(st.sent,0)]||{t:0}).t); lsSet(LS_POS,{id:t.id,t:Math.max(0,x-1)}); }
 
 /* ---------- media session ---------- */
 const ART={1:'icons/icon-512.png',2:'icons/icon-512.png',3:'icons/icon-512.png',4:'icons/icon-512.png'};
@@ -602,8 +729,9 @@ function setMeta(t){ if(!('mediaSession' in navigator)) return; try{
   navigator.mediaSession.metadata=new MediaMetadata({title:`P${t.no} ${t.title}`,artist:`${t.ch.label} ${t.ch.title}`,album:'宅建 スマートまとめレジュメ',
     artwork:[{src:new URL(ART[t.ch.no],location.href).href,sizes:'512x512',type:'image/png'}]}); }catch(e){} }
 function posState(){ if(!('mediaSession' in navigator)||!navigator.mediaSession.setPositionState||st.mode!=='audio'||!srcFor) return;
-  const d=audio.duration; if(!isFinite(d)||d<=0) return; try{ navigator.mediaSession.setPositionState({duration:d,playbackRate:audio.playbackRate||1,position:Math.min(audio.currentTime,d)}); }catch(e){} }
-if('mediaSession' in navigator&&!NATIVE){ const H=(a,f)=>{ try{ navigator.mediaSession.setActionHandler(a,f); }catch(e){} };
+  let d,p; if(srcFor==='mse'){ if(!S||!S.cur) return; d=S.cur.end-S.cur.start; p=mseLocal(); } else { d=audio.duration; p=audio.currentTime; }
+  if(!isFinite(d)||d<=0) return; try{ navigator.mediaSession.setPositionState({duration:d,playbackRate:audio.playbackRate||1,position:Math.max(0,Math.min(p,d))}); }catch(e){} }
+if('mediaSession' in navigator&&!NATIVE){ const H=(a,f)=>{ try{ navigator.mediaSession.setActionHandler(a,d=>{ logEv('media key '+a); f(d); }); }catch(e){} };
   H('play',()=>{ if(!isPlaying()) toggle(); }); H('pause',pause); H('stop',pause);
   H('previoustrack',prev); H('nexttrack',next);
   H('seekto',d=>{ if(st.mode==='audio'&&d&&isFinite(d.seekTime)) seekTo(d.seekTime); }); }
@@ -611,7 +739,7 @@ if('mediaSession' in navigator&&!NATIVE){ const H=(a,f)=>{ try{ navigator.mediaS
 /* ---------- sleep timer ---------- */
 function updateSleepInfo(){ const el=$('#sleepInfo'); if(st.sleepAt){ const m=Math.max(0,Math.ceil((st.sleepAt-Date.now())/60000)); el.textContent=`あと${m}分`; } else el.textContent=st.sleepPt?'この項目の終わりで停止':''; }
 function checkSleep(){ if(NATIVE) return; if(st.sleepAt&&Date.now()>=st.sleepAt){ st.sleepAt=0; $('#sleepSel').value='0'; pause(); updateSleepInfo(); toast('スリープタイマーで停止しました'); } }
-setInterval(()=>{ checkSleep(); if(!$('#sheet').hidden) updateSleepInfo(); },5000);
+setInterval(()=>{ checkSleep(); if(!$('#sheet').hidden) updateSleepInfo(); if(srcFor==='mse'&&!audio.paused) mseFill(); },5000);
 $('#sleepSel').addEventListener('change',e=>{ const v=e.target.value; if(NATIVE){ try{ NATIVE.setSleep(v==='pt'?-1:(+v||0)); }catch(er){} } st.sleepAt=0; st.sleepPt=false; if(v==='pt') st.sleepPt=true; else if(+v>0) st.sleepAt=Date.now()+(+v)*60000; updateSleepInfo(); });
 
 /* ---------- offline save ---------- */
@@ -669,9 +797,9 @@ list.addEventListener('click',e=>{
     lastUser=0; if(st.mode==='speech'){ const prevI=st.cur; st.cur=i; trackChanged(prevI,prevI!==i); speechStart(i,k,false); } else playTrack(i,t.sents[k].t,true); }
 });
 list.addEventListener('keydown',e=>{ if((e.key==='Enter'||e.key===' ')&&e.target.classList.contains('s')){ e.preventDefault(); e.target.click(); } });
-function setScope(s){ st.scope=s; document.querySelectorAll('[data-scope]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.scope===s))); savePrefs(); prefetch(); sendQueue(); }
+function setScope(s){ st.scope=s; document.querySelectorAll('[data-scope]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.scope===s))); savePrefs(); prefetch(); sendQueue(); mseRequeue(); }
 document.querySelectorAll('[data-scope]').forEach(b=>b.addEventListener('click',()=>{ setScope(b.dataset.scope); toast({all:'最後まで続けて再生します',chapter:'この章の終わりまで続けて再生します',point:'いまの項目だけを再生します'}[b.dataset.scope]+(st.repeat?'（繰り返し）':'')); }));
-function setRepeat(v){ st.repeat=v; $('#bRepeat').setAttribute('aria-pressed',String(v)); savePrefs(); prefetch(); sendQueue(); }
+function setRepeat(v){ st.repeat=v; $('#bRepeat').setAttribute('aria-pressed',String(v)); savePrefs(); prefetch(); sendQueue(); mseRequeue(); }
 $('#bRepeat').addEventListener('click',()=>{ setRepeat(!st.repeat); toast(st.repeat?'繰り返し再生：オン':'繰り返し再生：オフ'); });
 function setSpeed(v){ st.speed=v; applyRate(); if(NATIVE){ try{ NATIVE.setSpeed(v); }catch(e){} } $('#bSpeed').textContent=v.toFixed(1)+'×'; document.querySelectorAll('[data-speed]').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.speed===v))); savePrefs(); posState();
   if(st.mode==='speech'&&spk.on) speechStart(st.cur,Math.max(st.sent,0),false); }
@@ -681,7 +809,7 @@ $('#bSpeed').addEventListener('click',()=>{ const i=SPEEDS.indexOf(st.speed); se
 $('#bFollow').addEventListener('click',()=>{ st.follow=!st.follow; $('#bFollow').setAttribute('aria-pressed',String(st.follow)); savePrefs(); });
 function setMode(m){
   if(m===st.mode) return; const wasPlaying=isPlaying(); const t=tracks[st.cur];
-  const at=t?(st.mode==='audio'?(srcFor?audio.currentTime:lastTime):((t.sents[Math.max(st.sent,0)]||{t:0}).t)):0;
+  const at=t?(st.mode==='audio'?(srcFor==='mse'?mseLocal():srcFor?audio.currentTime:lastTime):((t.sents[Math.max(st.sent,0)]||{t:0}).t)):0;
   pause(); setPlayingUI(false); st.mode=m; savePrefs();
   document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===m)));
   $('#voiceRow').hidden=m!=='speech'; if(m==='speech') loadVoices();
@@ -694,6 +822,13 @@ $('#voiceSel').addEventListener('change',e=>{ st.voice=e.target.value; savePrefs
 $('#bMore').addEventListener('click',()=>{ armBackTrap(); $('#sheet').hidden=false; updateSleepInfo(); $('#sheetClose').focus(); });
 $('#sheetClose').addEventListener('click',()=>{ $('#sheet').hidden=true; $('#bMore').focus(); });
 $('#sheet').addEventListener('click',e=>{ if(e.target.id==='sheet') $('#sheet').hidden=true; });
+$('#bLog').addEventListener('click',async()=>{
+  const head=['UA: '+navigator.userAgent,'engine: '+(NATIVE?'native':useMse?'stream':'files')+' / standalone: '+STANDALONE+' / page: '+document.visibilityState,
+    'state: item='+(st.cur>=0?tracks[st.cur].id:'-')+' playing='+st.playing+' scope='+st.scope+' repeat='+st.repeat+' speed='+st.speed];
+  const text=head.concat(LOG).join('\n'); const box=$('#logBox'); box.value=text; box.hidden=false;
+  try{ await navigator.clipboard.writeText(text); toast('動作ログをコピーしました。チャットに貼り付けてください'); }
+  catch(e){ try{ box.focus(); box.select(); }catch(er){} toast('下の枠の文字を長押ししてコピーしてください'); }
+});
 let forgetArmed=0;
 $('#bForget').addEventListener('click',async()=>{
   if(Date.now()-forgetArmed>4000){ forgetArmed=Date.now(); $('#forgetNote').textContent='もう一度押すと削除します。'; return; }
@@ -709,10 +844,10 @@ let hiddenAt=0;
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='hidden'){ hiddenAt=Date.now(); savePos(true); return; }
   // returning to a paused app: start the next playback on a fresh audio element (works around iOS home-screen audio going silent after reopen)
-  if(!NATIVE&&st.mode==='audio'&&audio.paused&&hiddenAt&&Date.now()-hiddenAt>2000) needFresh=true;
+  if(IOS&&!NATIVE&&st.mode==='audio'&&audio.paused&&hiddenAt&&Date.now()-hiddenAt>2000) needFresh=true;
   if(st.cur>=0&&st.sent>=0&&st.follow){ const el=textOf(st.cur).querySelector('.s.now'); if(el) scrollToEl(el,'center'); }
 });
-addEventListener('pageshow',e=>{ if(e.persisted) needFresh=true; });
+addEventListener('pageshow',e=>{ if(e.persisted&&IOS) needFresh=true; });
 
 /* ---------- init ---------- */
 setScope(st.scope); setRepeat(st.repeat); if(!SPEEDS.includes(st.speed)) st.speed=1; setSpeed(st.speed);
