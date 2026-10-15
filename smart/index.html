@@ -141,13 +141,27 @@ ul.lst li{margin:5px 0}
 .hit ul{list-style:none;margin:6px 0 0;padding:0}
 .hit li{position:relative;padding-left:1.5em;margin:6px 0}
 .hit li::before{content:"";position:absolute;left:0;top:.42em;width:.9em;height:.9em;border:1.5px solid var(--muted);border-radius:2px}
-.q{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.q{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 12px;padding:12px 0;border-bottom:1px solid var(--line)}
 .q .qn{font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap}
-.q .ans{grid-column:2;justify-self:start;font-size:14px;font-weight:700;border-radius:999px;padding:1px 12px;border:1.5px dashed var(--line);color:var(--muted)}
+.q .qact{grid-column:2;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.q .pick{min-width:48px;height:38px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);font-size:19px;font-weight:700;line-height:1}
+.q .pick:hover{border-color:var(--accent)}
+.q.done .pick{opacity:.55}
+.q .ans{font-size:14px;font-weight:700;border-radius:999px;padding:2px 12px;border:1.5px dashed var(--line);color:var(--muted)}
 .q .ans .mk2{display:inline-block;filter:blur(5px);transition:filter .2s}
-.q .ans.show .mk2{filter:none}
-.q .ans.show.o{border:1.5px solid var(--ok);color:var(--ok)}
-.q .ans.show.x{border:1.5px solid var(--ng);color:var(--ng)}
+.q.show .ans .mk2{filter:none}
+.q.show .ans.o{border:1.5px solid var(--ok);color:var(--ok)}
+.q.show .ans.x{border:1.5px solid var(--ng);color:var(--ng)}
+.q .verdict{font-weight:700;font-size:13px}
+.q.right .verdict{color:var(--ok)}
+.q.wrong .verdict{color:var(--ng)}
+.q.wrong .qn{color:var(--ng)}
+.q .qex{grid-column:2;display:none;background:var(--box);border-radius:10px;padding:8px 12px;font-size:15px;line-height:1.7}
+.q .qex::before{content:"解説";display:block;font-size:11px;font-weight:700;letter-spacing:.12em;color:var(--accent)}
+.q.show .qex{display:block}
+.score{font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap;margin-left:4px}
+.score.good{color:var(--ok)}
+.reset{border:0;background:none;color:var(--muted);text-decoration:underline;font-size:12px;padding:4px 0}
 .ch-nav{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:28px 0 10px}
 .follow{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--dock-h) + env(safe-area-inset-bottom,0px) + 12px);z-index:9;box-shadow:0 4px 14px rgba(0,0,0,.18)}
 
@@ -261,7 +275,8 @@ img{max-width:100%}
         <div class="seg" id="modeSeg" role="group" aria-label="再生する内容">
           <button data-mode="full" aria-pressed="true">全文</button>
           <button data-mode="key" aria-pressed="false">要点だけ</button>
-          <button data-mode="test" aria-pressed="false">ミニテストだけ</button>
+          <button data-mode="test" aria-pressed="false">問題だけ</button>
+          <button data-mode="wrong" aria-pressed="false">間違えた問題</button>
         </div>
       </div>
       <div id="tocBody"></div>
@@ -321,7 +336,7 @@ ORDER.forEach(function(cid){
   c.u.forEach(function(u, ui){
     u.ch = cid; u.ui = ui; u.first = c.flat.length;
     u.B.forEach(function(b, bi){
-      b[2].forEach(function(s, si){ c.flat.push({a:s[1], b:s[2], ui:ui, bi:bi, si:si, ans:!!s[3]}); });
+      b[2].forEach(function(s, si){ c.flat.push({a:s[1], b:s[2], ui:ui, bi:bi, si:si, ans:s[3] === 1, ex:s[3] === 2}); });
     });
     u.last = c.flat.length - 1;
     u.speechEnd = u.last >= u.first ? c.flat[u.last].b : u.b;
@@ -333,8 +348,9 @@ function fmtLong(sec){ var m = Math.round(sec/60); var h = Math.floor(m/60); m =
 function esc(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 function rich(s){ return esc(s).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\*\*/g, ""); }
 function unitLabel(u){
-  if (u.k === "intro") return "今回のヒッタツ！ポイント";
+  if (u.k === "intro") return u.t === "ポイント" ? "今回のヒッタツ！ポイント" : u.t;
   if (u.k === "minitest") return "ミニテスト" + (CIRC[u.n-1] || u.n);
+  if (u.k === "quiz") return u.t;
   return u.n + "　" + u.t;
 }
 function chLabel(c){ return "第" + c.n + "章 " + c.t; }
@@ -354,7 +370,21 @@ function toast(msg){
 
 /* ---------- mode ---------- */
 var mode = store.get("mode", "full");
-var MODE_NAME = {full:"全文", key:"要点だけ", test:"ミニテストだけ"};
+var MODE_NAME = {full:"全文", key:"要点だけ", test:"問題だけ", wrong:"間違えた問題"};
+var results = store.get("results", {});
+function isQuizUnit(u){ return u.k === "minitest" || u.k === "quiz"; }
+function wrongSegs(c, units){
+  var out = [];
+  units.forEach(function(u){
+    if (!isQuizUnit(u)) return;
+    u.B.forEach(function(b, bi){
+      if (b[0] !== "q" || !b[2].length) return;
+      if (results[c.id + ":" + u.id + ":" + bi] !== 0) return;
+      out.push({c:c.id, a:Math.max(0, b[2][0][1] - 0.2), b:b[2][b[2].length-1][2] + 0.7});
+    });
+  });
+  return out;
+}
 function setModeUI(){
   [].forEach.call(document.querySelectorAll("#modeSeg button"), function(b){ b.setAttribute("aria-pressed", b.dataset.mode === mode ? "true" : "false"); });
 }
@@ -410,8 +440,10 @@ function buildQueue(range, md){
       } else {
         segs = segs.concat(keySegs(c, units));
       }
+    } else if (md === "wrong"){
+      segs = segs.concat(wrongSegs(c, units));
     } else {
-      units.forEach(function(u){ if (u.k === "minitest") segs.push({c:cid, a:u.a, b:u.b, full: u.ui === c.u.length-1}); });
+      units.forEach(function(u){ if (isQuizUnit(u)) segs.push({c:cid, a:u.a, b:u.b, full: u.ui === c.u.length-1}); });
     }
   });
   // merge contiguous
@@ -439,9 +471,10 @@ var curUnit = null, curK = -1;
 
 function setQueue(r, md, start){
   var q = buildQueue(r, md);
+  if (!q.length && md === "wrong"){ toast("この範囲に、間違えた問題はまだありません。問題の ○ × を押して答えると記録されます。"); return; }
   if (!q.length){
     if (md === "key") toast("この範囲には要点（これでヒッタツ！）がありません。全文を再生します。");
-    else if (md === "test") toast("この範囲にはミニテストがありません。全文を再生します。");
+    else if (md === "test") toast("この範囲には問題がありません。全文を再生します。");
     md = "full"; q = buildQueue(r, md);
   }
   range = r; qmode = md; queue = q; qi = 0; advancedFor = -1;
@@ -596,7 +629,7 @@ function highlight(k){
   nowEl = el;
   if (!el) return;
   el.classList.add("now");
-  if (el.classList.contains("ans")) el.classList.add("show");
+  if (el.classList.contains("ans") || el.closest(".qex")){ var qq = el.closest(".q"); if (qq) qq.classList.add("show"); }
   if (follow && !document.hidden) scrollToEl(el);
 }
 function scrollToEl(el){
@@ -755,16 +788,34 @@ function renderToc(){
         '<span class="dur">' + fmt(c.d) + '</span><button class="play-ic" data-play="ch" data-id="' + cid + '" aria-label="' + esc(chLabel(c)) + 'を再生">' + ICON_PLAY + "</button></div>" +
         '<ul class="units" id="units-' + cid + '"' + (openCh === cid ? "" : " hidden") + ">";
       c.u.forEach(function(u, ui){
-        h += '<li><button class="unit-b' + (u.k === "minitest" ? " mt" : "") + '" data-goto="' + cid + '" data-u="' + ui + '" id="tu-' + u.id + '"><span class="chk">' + (heard[u.id] ? "✓" : "") + "</span><span>" + esc(unitLabel(u)) + '</span></button><span class="dur">' + fmt(u.b - u.a) +
+        h += '<li><button class="unit-b' + (isQuizUnit(u) ? " mt" : "") + '" data-goto="' + cid + '" data-u="' + ui + '" id="tu-' + u.id + '"><span class="chk">' + (heard[u.id] ? "✓" : "") + "</span><span>" + esc(unitLabel(u)) + (isQuizUnit(u) ? '<span class="score" id="sc-' + u.id + '"></span>' : "") + '</span></button><span class="dur">' + fmt(u.b - u.a) +
           '</span><button class="mini-play" data-play="unit" data-id="' + cid + '" data-u="' + ui + '" aria-label="' + esc(unitLabel(u)) + 'を再生">' + ICON_PLAY + "</button></li>";
       });
       h += "</ul></div>";
     });
     h += "</section>";
   });
+  h += '<p class="credit"><button class="reset" id="resetRes">○×の解答記録を消す</button></p>';
   h += '<p class="credit">音声：VOICEVOX:No.7（読み上げ用に自動生成）。表や図は、聞いて分かるように文章で説明しています。本文と音声は暗号化して保存しています。</p>';
   tocBody.innerHTML = h;
-  ORDER.forEach(function(cid){ updateTocHeard(cid); });
+  ORDER.forEach(function(cid){ updateTocHeard(cid); updateScores(cid); });
+  var rr = document.getElementById("resetRes");
+  if (rr) rr.addEventListener("click", function(){
+    if (rr.dataset.armed !== "1"){ rr.dataset.armed = "1"; rr.textContent = "もう一度押すと、○×の記録をすべて消します"; return; }
+    results = {}; store.set("results", results); rr.dataset.armed = ""; rr.textContent = "○×の解答記録を消す";
+    ORDER.forEach(function(c2){ updateScores(c2); }); if (shownCh) renderChapter(shownCh); toast("○×の記録を消しました");
+  });
+}
+function updateScores(cid){
+  var c = CH[cid];
+  c.u.forEach(function(u){
+    if (!isQuizUnit(u)) return;
+    var n = 0, ok = 0, tot = 0;
+    u.B.forEach(function(b, bi){ if (b[0] !== "q") return; tot++; var r = results[cid + ":" + u.id + ":" + bi]; if (r != null){ n++; if (r) ok++; } });
+    var el = document.getElementById("sc-" + u.id); if (!el) return;
+    el.textContent = n ? ("　" + ok + "/" + tot + "問正解" + (n < tot ? "（未解答" + (tot - n) + "）" : "")) : "";
+    el.classList.toggle("good", n === tot && ok === tot);
+  });
 }
 function updateTocHeard(cid, uid){
   var c = CH[cid], n = 0;
@@ -808,14 +859,14 @@ function renderChapter(cid){
   // chapter title sentence is the first sentence of the intro unit
   var intro = c.u[0];
   h += '<h2 class="ch-title"><span class="s" data-k="0">第' + c.n + "章　" + esc(c.t) + "</span></h2>";
-  h += '<div class="ch-actions"><button class="btn primary" data-act="ch">' + ICON_PLAY + 'この章を再生</button><button class="btn" data-act="key">要点だけ</button><button class="btn" data-act="test">ミニテストだけ</button></div></header>';
+  h += '<div class="ch-actions"><button class="btn primary" data-act="ch">' + ICON_PLAY + 'この章を再生</button><button class="btn" data-act="key">要点だけ</button><button class="btn" data-act="test">問題だけ</button></div></header>';
   c.u.forEach(function(u){
     h += '<section class="unit" id="u-' + u.id + '">';
     var open = null; // current grouping
     function close(){ if (open){ h += open.end; open = null; } }
     function group(kind, start, end){ if (!open || open.kind !== kind){ close(); h += start; open = {kind:kind, end:end}; } }
-    u.B.forEach(function(b){
-      var t = b[0], ex = b[1] || {}, ss = b[2], inner = "";
+    u.B.forEach(function(b, bi){
+      var t = b[0], ex = b[1] || {}, ss = b[2], inner = "", k0 = k;
       var spans = ss.map(function(s){ var out = s[3] ? null : sentSpan(s, k); k++; return out; });
       var body = spans.filter(Boolean).join("");
       if (t === "chtitle"){ return; }
@@ -830,8 +881,15 @@ function renderChapter(cid){
       }
       if (t === "q"){
         close();
-        var ansK = k - 1, ans = ex.ans;
-        h += '<div class="q"><span class="qn">問' + ex.n + "</span><span>" + body + '</span><span class="ans s ' + (ans === "○" ? "o" : "x") + '" data-k="' + ansK + '" role="button" tabindex="0" aria-label="正解を表示">正解 <span class="mk2">' + (ans === "○" ? "○" : "×") + "</span></span></div>";
+        var ansK = -1, ans = ex.ans, exHtml = "";
+        ss.forEach(function(s, j){ if (s[3] === 1) ansK = k0 + j; else if (s[3] === 2) exHtml += sentSpan(s, k0 + j); });
+        var qid = cid + ":" + u.id + ":" + bi, r = results[qid];
+        var cls = r == null ? "" : (" done show " + (r ? "right" : "wrong"));
+        h += '<div class="q' + cls + '" data-qid="' + qid + '" data-ans="' + ans + '"><span class="qn">問' + ex.n + "</span><span>" + body + "</span>" +
+          '<div class="qact"><button class="pick" data-pick="○" aria-label="○と答える">○</button><button class="pick" data-pick="×" aria-label="×と答える">×</button>' +
+          '<span class="ans s ' + (ans === "○" ? "o" : "x") + '" data-k="' + ansK + '" role="button" tabindex="0" aria-label="正解を表示">正解 <span class="mk2">' + ans + "</span></span>" +
+          '<span class="verdict">' + (r == null ? "" : (r ? "正解しました" : "前回は不正解")) + "</span></div>" +
+          (exHtml ? '<div class="qex">' + exHtml + "</div>" : "") + "</div>";
         return;
       }
       close();
@@ -856,14 +914,24 @@ reader.addEventListener("click", function(e){
   if (a){ follow = true; $("followBtn").hidden = true; setQueue({type:"ch", id:shownCh}, a.dataset.act === "ch" ? "full" : a.dataset.act); return; }
   var n = e.target.closest("[data-ch]");
   if (n){ follow = false; renderChapter(n.dataset.ch); window.scrollTo({top:0}); if (playing && curCh !== shownCh) $("followBtn").hidden = false; return; }
+  var pk = e.target.closest(".pick");
+  if (pk){
+    var qd = pk.closest(".q"), ok = pk.dataset.pick === qd.dataset.ans;
+    results[qd.dataset.qid] = ok ? 1 : 0; store.set("results", results);
+    qd.classList.remove("right", "wrong"); qd.classList.add("done", "show", ok ? "right" : "wrong");
+    qd.querySelector(".verdict").textContent = ok ? "正解！" : "不正解";
+    updateScores(shownCh);
+    return;
+  }
   var s = e.target.closest(".s");
   if (s){
-    if (s.classList.contains("ans") && !s.classList.contains("show")){ s.classList.add("show"); return; }
+    var qq = s.closest(".q");
+    if (s.classList.contains("ans") && qq && !qq.classList.contains("show")){ qq.classList.add("show"); return; }
     var c = CH[shownCh], f = c.flat[+s.dataset.k];
     if (f){ follow = true; $("followBtn").hidden = true; jumpTo(shownCh, Math.max(0, f.a - 0.1)); }
   }
 });
-reader.addEventListener("keydown", function(e){ if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("ans")){ e.preventDefault(); e.target.classList.add("show"); } });
+reader.addEventListener("keydown", function(e){ if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("ans")){ e.preventDefault(); var qq = e.target.closest(".q"); if (qq) qq.classList.add("show"); } });
 
 /* ---------- views (phone) ---------- */
 function setView(v){
@@ -882,7 +950,8 @@ syncDock();
 
 /* ---------- boot ---------- */
 var nSent = ORDER.reduce(function(a, cid){ return a + CH[cid].flat.length; }, 0);
-$("meta").textContent = PARTS.length + "部・全" + ORDER.length + "章・ミニテスト" + DATA.nTests + "回 ・ 全部で約" + fmtLong(TOTAL);
+var NQ = 0; ORDER.forEach(function(cid){ CH[cid].u.forEach(function(u){ if (isQuizUnit(u)) u.B.forEach(function(b){ if (b[0] === "q") NQ++; }); }); });
+$("meta").textContent = PARTS.length + "部・全" + ORDER.length + "章・○×問題" + NQ + "問 ・ 全部で約" + fmtLong(TOTAL);
 setModeUI(); renderToc(); renderResume();
 var p0 = store.get("pos", null);
 renderChapter(p0 && CH[p0.c] ? p0.c : ORDER[0]);
@@ -898,7 +967,7 @@ window.__player = {queue: function(){ return queue; }, qi: function(){ return qi
 <script>
 /* ---- app shell: unlock, decrypt, install, offline ---- */
 var META = null, KEY = null, deferredPrompt = null;
-var APP_VERSION = "2026.10.15-1";
+var APP_VERSION = "2026.10.15-2";
 var PACK_CACHE = "stx-pack-v1";
 function $$(id){ return document.getElementById(id); }
 function b64(s){ var bin = atob(s), u = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
@@ -957,7 +1026,7 @@ var PACK = (function(){
     url: function(cid){
       if (urls[cid]){ touch(cid); return Promise.resolve(urls[cid]); }
       if (inflight[cid]) return inflight[cid];
-      var p = fetch("a/" + cid + ".bin").then(function(r){ if (!r.ok) throw new Error("http " + r.status); return r.arrayBuffer(); })
+      var p = fetch(packUrl(cid)).then(function(r){ if (!r.ok) throw new Error("http " + r.status); return r.arrayBuffer(); })
         .then(function(buf){ return dec(buf); })
         .then(function(plain){ var u = URL.createObjectURL(new Blob([plain], {type: "audio/mpeg"})); urls[cid] = u; touch(cid); delete inflight[cid]; return u; })
         .catch(function(e){ delete inflight[cid]; throw e; });
@@ -1016,7 +1085,22 @@ function setupPwaBar(){
   var bo = $$("bOffline"); if (bo) bo.addEventListener("click", saveOffline);
   checkOffline();
 }
-function packUrl(id){ return new URL("a/" + id + ".bin", location.href).href; }
+function packUrl(id){
+  var f = null; if (META) for (var i = 0; i < META.files.length; i++){ if (META.files[i].id === id){ f = META.files[i]; break; } }
+  return new URL("a/" + id + ".bin" + (f && f.h ? "?v=" + f.h : ""), location.href).href;
+}
+/* drop saved audio whose version no longer matches (the chapter was re-recorded) */
+async function prunePacks(){
+  try{
+    if (!("caches" in window)) return;
+    var want = {}; META.files.forEach(function(f){ want[f.id] = f.h || ""; });
+    var c = await caches.open(PACK_CACHE), ks = await c.keys();
+    for (var i = 0; i < ks.length; i++){
+      var u = new URL(ks[i].url), m = u.pathname.match(/\/a\/(\d-\d\d)\.bin$/); if (!m) continue;
+      if (!(m[1] in want) || (want[m[1]] && u.searchParams.get("v") !== want[m[1]])) await c.delete(ks[i]);
+    }
+  }catch(e){}
+}
 async function checkOffline(){
   try{
     var c = await caches.open(PACK_CACHE), n = 0;
@@ -1058,6 +1142,7 @@ async function saveOffline(){
   if ("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(function(){}); }
   try{ var r = await fetch("a/meta.json", {cache: "no-cache"}); if (!r.ok) throw 0; META = await r.json(); }
   catch(e){ $$("lockMsg").textContent = "読み込めませんでした。電波の良い場所で、もう一度開いてください。"; return; }
+  await prunePacks();
   var k = await loadKey();
   if (!k){ var p = null; try{ p = localStorage.getItem("stx26:pass"); }catch(e){} if (p){ try{ k = await derive(p); }catch(e){} } }
   if (k){ try{ var d = await fetchData(k); KEY = k; openApp(d); return; }catch(e){} }

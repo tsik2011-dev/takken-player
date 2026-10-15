@@ -1,9 +1,9 @@
 /* スマートテキスト 読み上げ — service worker
    app shell: network-first (3 s timeout) with cache fallback, so updates arrive when online
-   a/<chapter>.bin (encrypted audio): cache-first, saved when played or downloaded for offline use
+   a/<chapter>.bin?v=<hash> (encrypted audio): cache-first by exact URL (a new hash = a new download), saved when played or downloaded for offline use
    a/meta.json, a/data.bin: network-first
    fonts: cache-first */
-const VERSION = '2026.10.15-1';
+const VERSION = '2026.10.15-2';
 const SHELL = 'stx-shell-' + VERSION;
 const PACK = 'stx-pack-v1';
 const FONTS = 'stx-fonts';
@@ -35,9 +35,9 @@ async function networkFirst(req, cacheName) {
   }
 }
 
-async function cacheFirst(req, cacheName, opaqueOk) {
+async function cacheFirst(req, cacheName, opaqueOk, exact) {
   const c = await caches.open(cacheName);
-  const hit = await c.match(req, { ignoreSearch: true });
+  const hit = await c.match(req, { ignoreSearch: !exact });
   if (hit) return hit;
   const r = await fetch(req);
   if (r.ok || (opaqueOk && r.type === 'opaque')) c.put(req, r.clone());
@@ -50,7 +50,7 @@ self.addEventListener('fetch', e => {
   const url = new URL(req.url);
   if (url.origin === location.origin) {
     if (!url.pathname.startsWith(new URL('./', self.registration.scope).pathname)) return;
-    if (/\/a\/\d-\d\d\.bin$/.test(url.pathname)) { e.respondWith(cacheFirst(req, PACK)); return; }
+    if (/\/a\/\d-\d\d\.bin$/.test(url.pathname)) { e.respondWith(cacheFirst(req, PACK, false, true)); return; }
     if (url.pathname.includes('/a/')) { e.respondWith(networkFirst(req, PACK)); return; }
     e.respondWith(networkFirst(req, SHELL));
     return;
