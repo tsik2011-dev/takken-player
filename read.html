@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>宅建まとめ 読み上げ用ページ</title>
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#F1F3F0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#11161B" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<style>
+/* A plain article page made for Chrome's built-in "このページを読み上げ" (Listen to this page) reader. */
+:root{
+  --paper:#F1F3F0; --sheet:#FBFCFA; --ink:#17202A; --muted:#5A6570; --line:#D6DCD6;
+  --accent:#1E6A63; --accent-ink:#FFFFFF; --accent-soft:#DCEBE7; --seal:#B5412E; --seal-ink:#FFF7F2;
+  --f-display:"Hiragino Mincho ProN","Yu Mincho","Noto Serif JP",serif;
+  --f-body:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --paper:#11161B; --sheet:#171E25; --ink:#E5EAE6; --muted:#98A3AA; --line:#28323B;
+  --accent:#62BDB2; --accent-ink:#0D1A18; --accent-soft:#1D3533; --seal:#E07A62; --seal-ink:#1B0F0B; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --paper:#11161B; --sheet:#171E25; --ink:#E5EAE6; --muted:#98A3AA; --line:#28323B;
+  --accent:#62BDB2; --accent-ink:#0D1A18; --accent-soft:#1D3533; --seal:#E07A62; --seal-ink:#1B0F0B; color-scheme:dark }
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.9;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 calc(48px + env(safe-area-inset-bottom,0px))}
+.wrap{max-width:720px;margin:0 auto}
+header.tools{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;padding-block:18px 14px;border-bottom:2px solid var(--ink)}
+.back{font-size:13px;color:var(--accent);text-decoration:none}
+.how{margin:0;font-size:13.5px;line-height:1.75;color:var(--ink);background:var(--accent-soft);border-radius:10px;padding:10px 12px}
+.how b{font-weight:700}
+.pick{display:grid;grid-template-columns:minmax(0,1fr);gap:6px}
+.pick label{font-size:12px;letter-spacing:.08em;color:var(--muted)}
+.pick select{font:inherit;font-size:15px;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--sheet);color:var(--ink);width:100%;max-width:100%}
+article{padding-block:8px 24px}
+article h1{font-family:var(--f-display);font-size:26px;line-height:1.35;margin:18px 0 6px;text-wrap:balance}
+article h2{font-family:var(--f-display);font-size:21px;margin:28px 0 4px;padding-top:14px;border-top:1px solid var(--line)}
+article h3{font-size:17px;margin:22px 0 4px;color:var(--accent)}
+article p{margin:0 0 .9em}
+nav.pager{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:14px;font-size:14px}
+nav.pager a{color:var(--accent);text-decoration:none}
+.msg{color:var(--muted);font-size:14px;padding-block:40px;text-align:center}
+.lock{display:grid;gap:10px;max-width:420px;margin:40px auto}
+.lock input{font-size:18px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--sheet);color:var(--ink);width:100%}
+.lock button{font:inherit;font-weight:700;padding:12px;border-radius:999px;border:0;background:var(--accent);color:var(--accent-ink)}
+.err{color:var(--seal);font-size:13px;margin:0;min-height:1.3em}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="tools">
+    <a class="back" href="./">← 読み上げプレーヤーに戻る</a>
+    <p class="how">Chrome の右上のメニュー（︙）から<b>「このページを読み上げ」</b>を選ぶと、Google の自然な声で読み上げます。ホームボタンで閉じても、画面を消しても再生が続きます。速さや声も、下に出るプレーヤーで変えられます。</p>
+    <div class="pick"><label for="range">読み上げる範囲</label><select id="range" aria-label="読み上げる範囲"></select></div>
+  </header>
+  <p class="msg" id="msg">読み込み中…</p>
+  <form class="lock" id="lock" hidden autocomplete="off">
+    <label for="pass">合言葉</label>
+    <input id="pass" type="text" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="xxxx-xxxx-xxxx-xxxx" required>
+    <p class="err" id="err" role="alert"></p>
+    <button type="submit" id="passBtn">開く</button>
+  </form>
+  <main><article id="doc" hidden></article></main>
+  <nav class="pager" id="pager" hidden></nav>
+</div>
+<script>
+(function(){
+'use strict';
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function lsGet(k){ try{ return JSON.parse(localStorage.getItem(k)||'null'); }catch(e){ return null; } }
+function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+function idb(){ return new Promise((res,rej)=>{ const r=indexedDB.open('tkp',1); r.onupgradeneeded=()=>r.result.createObjectStore('kv'); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+async function kv(mode,k,v){ try{ const db=await idb(); return await new Promise((res,rej)=>{ const tx=db.transaction('kv',mode==='get'?'readonly':'readwrite'); const s=tx.objectStore('kv');
+  const q=mode==='get'?s.get(k):s.put(v,k); tx.oncomplete=()=>res(q.result); tx.onerror=()=>rej(tx.error); }); }catch(e){ return undefined; } }
+let META=null;
+const b64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+const cleanPass=p=>p.normalize('NFKC').replace(/[\s\-－ー―‐_]/g,'').toLowerCase();
+async function deriveKey(pass){
+  const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(cleanPass(pass)),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt:b64(META.salt),iterations:META.iter,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['decrypt']);
+}
+async function loadData(key){
+  const r=await fetch('pack/data.bin'); if(!r.ok) throw new Error('net');
+  const u=new Uint8Array(await r.arrayBuffer()); let plain;
+  try{ plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:u.slice(0,12)},key,u.slice(12)); }catch(e){ const er=new Error('badpass'); er.badpass=true; throw er; }
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+
+function render(data){
+  const chs=data.chapters;
+  const sel=$('#range');
+  let opts='<option value="all">全体（全章をまとめて）</option>';
+  chs.forEach(ch=>{ opts+=`<option value="c${ch.no}">${esc(ch.label)} ${esc(ch.title)}（章ぜんぶ）</option>`; });
+  chs.forEach(ch=>{ opts+=`<optgroup label="${esc(ch.label)} ${esc(ch.title)}">`+ch.points.map(p=>`<option value="${p.id}">ポイント${p.no} ${esc(p.title)}</option>`).join('')+'</optgroup>'; });
+  sel.innerHTML=opts;
+  const q=new URLSearchParams(location.search).get('r');
+  const last=lsGet('tkp-pos-v1');
+  let r=q||(last&&last.id?last.id.replace(/p\d+$/,''):'all');
+  const valid=['all'].concat(chs.map(c=>'c'+c.no)).concat(chs.flatMap(c=>c.points.map(p=>p.id)));
+  if(!valid.includes(r)) r='all';
+  sel.value=r;
+  sel.addEventListener('change',()=>{ location.search='?r='+encodeURIComponent(sel.value); });
+
+  const para=sents=>'<p>'+sents.map(s=>esc(s.s)).join('')+'</p>';
+  const point=(p,ch,lvl)=>`<h${lvl}>ポイント${p.no}　${esc(p.title)}</h${lvl}>`+p.paras.map(para).join('');
+  let title, html='';
+  if(r==='all'){
+    title='宅建スマートまとめレジュメ　全体';
+    html=chs.map(ch=>`<h2>${esc(ch.label)}　${esc(ch.title)}</h2>`+ch.points.map(p=>point(p,ch,3)).join('')).join('');
+  } else if(/^c\d+$/.test(r)){
+    const ch=chs.find(c=>'c'+c.no===r);
+    title=`${ch.label}　${ch.title}`;
+    html=ch.points.map(p=>point(p,ch,2)).join('');
+  } else {
+    const ch=chs.find(c=>c.points.some(p=>p.id===r)); const p=ch.points.find(x=>x.id===r);
+    title=`${ch.label}　ポイント${p.no}　${p.title}`;
+    html=p.paras.map(para).join('');
+  }
+  document.title='宅建まとめ '+title.replace(/　/g,' ');
+  const doc=$('#doc'); doc.innerHTML=`<h1>${esc(title)}</h1>`+html; doc.hidden=false;
+
+  // previous / next range of the same kind
+  const kind=r==='all'?'all':/^c\d+$/.test(r)?'ch':'pt';
+  const list=kind==='ch'?chs.map(c=>({v:'c'+c.no,t:`${c.label} ${c.title}`})):kind==='pt'?chs.flatMap(c=>c.points.map(p=>({v:p.id,t:`${c.label} ポイント${p.no} ${p.title}`}))):[];
+  const i=list.findIndex(x=>x.v===r);
+  if(i>=0){ const pg=$('#pager'); const a=list[i-1], b=list[i+1];
+    pg.innerHTML=(a?`<a href="?r=${a.v}">← ${esc(a.t)}</a>`:'<span></span>')+(b?`<a href="?r=${b.v}">${esc(b.t)} →</a>`:'<span></span>'); pg.hidden=false; }
+  $('#msg').hidden=true;
+}
+
+async function boot(){
+  try{ const r=await fetch('pack/meta.json',{cache:'no-cache'}); if(!r.ok) throw 0; META=await r.json(); }
+  catch(e){ $('#msg').textContent='インターネットに接続してから開いてください。'; return; }
+  let key=await kv('get','key'); let data=null;
+  if(!key){ const p=lsGet('tkp-pass-v1'); if(p){ try{ key=await deriveKey(p); }catch(e){} } }
+  if(key){ try{ data=await loadData(key); }catch(e){ if(!e.badpass){ $('#msg').textContent='読み込めませんでした。通信状態を確認して、開き直してください。'; return; } } }
+  if(data){ render(data); return; }
+  $('#msg').textContent='このブラウザでは、まだ合言葉が入力されていません。'; $('#lock').hidden=false;
+  $('#lock').addEventListener('submit',async e=>{
+    e.preventDefault(); const pass=$('#pass').value; $('#err').textContent=''; $('#passBtn').disabled=true;
+    try{ const k=await deriveKey(pass); const d=await loadData(k); const ok=await kv('set','key',k); if(!ok) lsSet('tkp-pass-v1',pass); $('#lock').hidden=true; render(d); }
+    catch(er){ $('#err').textContent=er.badpass?'合言葉が違います':'通信できませんでした'; }
+    $('#passBtn').disabled=false;
+  });
+}
+boot();
+})();
+</script>
+</body>
+</html>

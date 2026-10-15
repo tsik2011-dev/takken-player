@@ -200,6 +200,7 @@ body{margin:0}
     <div class="cta">
       <button class="btn primary" id="playAll" type="button"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z"/></svg>全体を通して再生</button>
       <button class="btn" id="resume" type="button" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5"/></svg><span>続きから<span class="sub" id="resumeSub"></span></span></button>
+      <a class="btn" id="readLink2" href="read.html" target="_blank" rel="noopener" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4zM16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/></svg><span>Google の声で聞く<span class="sub">　画面を閉じても続く</span></span></a>
     </div>
     <p class="note">再生中にホームボタンで閉じたり画面をロックしたりしても、再生は続きます。通知やロック画面から一時停止・前後の項目へ移動できます。</p>
     <div class="panel" id="installPanel" hidden>
@@ -271,7 +272,8 @@ body{margin:0}
       <div class="row"><button class="chip" id="bFollow" type="button" aria-pressed="true">読んでいる文に自動でスクロール</button></div></div>
     <div class="field"><span class="k">読み上げの声</span>
       <div class="row seg" role="group" aria-label="読み上げの声"><button type="button" data-mode="audio" aria-pressed="true">収録音声</button><button type="button" data-mode="speech" aria-pressed="false">端末の音声</button></div>
-      <p>収録音声はバックグラウンド・画面ロック中も再生が続きます。端末の音声は端末に入っている声で読み上げますが、画面を表示している間だけ動きます。</p>
+      <p>収録音声は、画面を閉じても再生が続きます。端末の音声は、Chrome の仕組み上、画面を閉じると止まります。Google の自然な声のまま画面を閉じても聞きたいときは「Chrome の読み上げで聞く」を使ってください。</p>
+      <div class="row"><a class="chip" id="readLink" href="read.html" target="_blank" rel="noopener">Chrome の読み上げで聞く</a></div>
       <div class="row" id="voiceRow" hidden><select id="voiceSel" aria-label="端末の声"></select></div></div>
     <div class="field"><span class="k">音が出ないとき</span>
       <p>再生ボタンを押しても音が出ないときは、いったん一時停止してからもう一度再生してください。それでも鳴らない場合は、Safari（Android は Chrome）でこのページを開くと再生できます。</p></div>
@@ -700,7 +702,9 @@ function updateNow(){
   const s=$('#nowSeal'); s.textContent=SEAL[t.ch.no]; s.classList.remove('idle');
   $('#nowT').textContent=`P${t.no} ${t.title}`; $('#nowS').textContent=`${t.ch.label} ${t.ch.title}`;
   $('#nowPos').textContent=`${t.idx+1}/${tracks.length}`;
+  setReadLinks();
 }
+function setReadLinks(){ const t=tracks[st.cur]; const h='read.html'+(t?'?r=c'+t.ch.no:''); $('#readLink').href=h; $('#readLink2').href=h; }
 let dragging=false; const seek=$('#seek');
 function updateProgress(x,dd){
   const t=tracks[st.cur]; if(!t) return;
@@ -840,9 +844,10 @@ addEventListener('keydown',e=>{
   if(e.code==='Space'){ e.preventDefault(); toggle(); } else if(e.key==='ArrowLeft') skip(-5); else if(e.key==='ArrowRight') skip(5);
 });
 addEventListener('pagehide',()=>savePos(true));
-let hiddenAt=0;
+let hiddenAt=0, speechCut=false;
 document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState==='hidden'){ hiddenAt=Date.now(); savePos(true); return; }
+  if(document.visibilityState==='hidden'){ hiddenAt=Date.now(); savePos(true); if(st.mode==='speech'&&spk.on){ speechCut=true; speechStop(); } return; }
+  if(speechCut){ speechCut=false; toast('端末の音声は、画面を閉じると止まります（Chrome の仕組み）。画面を閉じても聞くには「Google の声で聞く」か収録音声を使ってください'); }
   // returning to a paused app: start the next playback on a fresh audio element (works around iOS home-screen audio going silent after reopen)
   if(IOS&&!NATIVE&&st.mode==='audio'&&audio.paused&&hiddenAt&&Date.now()-hiddenAt>2000) needFresh=true;
   if(st.cur>=0&&st.sent>=0&&st.follow){ const el=textOf(st.cur).querySelector('.s.now'); if(el) scrollToEl(el,'center'); }
@@ -859,6 +864,7 @@ const pos=lsGet(LS_POS);
 if(pos&&byId[pos.id]){ const t=byId[pos.id]; $('#resume').hidden=false; $('#resumeSub').textContent=` ${t.ch.label} P${t.no} ${t.title} ${fmt(pos.t)}`;
   $('#resume').addEventListener('click',()=>playTrack(t.idx,pos.t,true)); }
 refreshSaved();
+$('#readLink2').hidden=!(ANDROID&&!NATIVE); setReadLinks();
 function renderNative(s){
   const dl=s.dl||{}; const all=dl.total||tracks.length, n=dl.done||0;
   if(dl.mask&&dl.mask!==lastMask){ lastMask=dl.mask; tracks.forEach((t,i)=>liOf(i).classList.toggle('saved',dl.mask[i]==='1')); }
