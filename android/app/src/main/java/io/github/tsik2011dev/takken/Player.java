@@ -457,8 +457,12 @@ public final class Player implements MediaPlayer.OnCompletionListener, MediaPlay
 
     private void registerNoisy(boolean on) {
         if (on && !noisyRegistered) {
-            ctx.registerReceiver(noisy, new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY));
-            noisyRegistered = true;
+            IntentFilter f = new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
+            try {
+                if (android.os.Build.VERSION.SDK_INT >= 33) ctx.registerReceiver(noisy, f, Context.RECEIVER_NOT_EXPORTED);
+                else ctx.registerReceiver(noisy, f);
+                noisyRegistered = true;
+            } catch (Exception ignored) { }
         } else if (!on && noisyRegistered) {
             try { ctx.unregisterReceiver(noisy); } catch (Exception ignored) { }
             noisyRegistered = false;
