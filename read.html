@@ -91,33 +91,35 @@ async function loadData(key){
 }
 
 function render(data){
-  const chs=data.chapters;
+  const all=data.chapters, chs=all.filter(c=>!c.group||c.group==='main');
   const sel=$('#range');
-  let opts='<option value="all">全体（全章をまとめて）</option>';
-  chs.forEach(ch=>{ opts+=`<option value="c${ch.no}">${esc(ch.label)} ${esc(ch.title)}（章ぜんぶ）</option>`; });
-  chs.forEach(ch=>{ opts+=`<optgroup label="${esc(ch.label)} ${esc(ch.title)}">`+ch.points.map(p=>`<option value="${p.id}">ポイント${p.no} ${esc(p.title)}</option>`).join('')+'</optgroup>'; });
+  const pname=(p,ch)=>ch.group==='cram'?esc(p.title):`ポイント${p.no} ${esc(p.title)}`;
+  let opts='<option value="all">レジュメ全体（全章をまとめて）</option>';
+  all.forEach(ch=>{ opts+=`<option value="c${ch.no}">${esc(ch.label)} ${esc(ch.title)}（${ch.group?'ぜんぶ':'章ぜんぶ'}）</option>`; });
+  all.forEach(ch=>{ opts+=`<optgroup label="${esc(ch.label)} ${esc(ch.title)}">`+ch.points.map(p=>`<option value="${p.id}">${pname(p,ch)}</option>`).join('')+'</optgroup>'; });
   sel.innerHTML=opts;
   const q=new URLSearchParams(location.search).get('r');
   const last=lsGet('tkp-pos-v1');
   let r=q||(last&&last.id?last.id.replace(/p\d+$/,''):'all');
-  const valid=['all'].concat(chs.map(c=>'c'+c.no)).concat(chs.flatMap(c=>c.points.map(p=>p.id)));
+  const valid=['all'].concat(all.map(c=>'c'+c.no)).concat(all.flatMap(c=>c.points.map(p=>p.id)));
   if(!valid.includes(r)) r='all';
   sel.value=r;
   sel.addEventListener('change',()=>{ location.search='?r='+encodeURIComponent(sel.value); });
 
-  const para=sents=>'<p>'+sents.map(s=>esc(s.s)).join('')+'</p>';
-  const point=(p,ch,lvl)=>`<h${lvl}>ポイント${p.no}　${esc(p.title)}</h${lvl}>`+p.paras.map(para).join('');
+  // drill answers are written as they are spoken (「答えは、マル。」) so the reader voices them naturally
+  const para=sents=>'<p>'+sents.map(s=>esc(s.v&&/^答え/.test(s.s)?s.v:s.s)).join('')+'</p>';
+  const point=(p,ch,lvl)=>`<h${lvl}>${ch.group==='cram'?esc(p.title):`ポイント${p.no}　${esc(p.title)}`}</h${lvl}>`+p.paras.map(para).join('');
   let title, html='';
   if(r==='all'){
     title='宅建スマートまとめレジュメ　全体';
     html=chs.map(ch=>`<h2>${esc(ch.label)}　${esc(ch.title)}</h2>`+ch.points.map(p=>point(p,ch,3)).join('')).join('');
   } else if(/^c\d+$/.test(r)){
-    const ch=chs.find(c=>'c'+c.no===r);
+    const ch=all.find(c=>'c'+c.no===r);
     title=`${ch.label}　${ch.title}`;
     html=ch.points.map(p=>point(p,ch,2)).join('');
   } else {
-    const ch=chs.find(c=>c.points.some(p=>p.id===r)); const p=ch.points.find(x=>x.id===r);
-    title=`${ch.label}　ポイント${p.no}　${p.title}`;
+    const ch=all.find(c=>c.points.some(p=>p.id===r)); const p=ch.points.find(x=>x.id===r);
+    title=`${ch.label}　${ch.title}　${ch.group==='cram'?p.title:`ポイント${p.no}　${p.title}`}`;
     html=p.paras.map(para).join('');
   }
   document.title='宅建まとめ '+title.replace(/　/g,' ');
@@ -125,7 +127,7 @@ function render(data){
 
   // previous / next range of the same kind
   const kind=r==='all'?'all':/^c\d+$/.test(r)?'ch':'pt';
-  const list=kind==='ch'?chs.map(c=>({v:'c'+c.no,t:`${c.label} ${c.title}`})):kind==='pt'?chs.flatMap(c=>c.points.map(p=>({v:p.id,t:`${c.label} ポイント${p.no} ${p.title}`}))):[];
+  const list=kind==='ch'?all.map(c=>({v:'c'+c.no,t:`${c.label} ${c.title}`})):kind==='pt'?all.flatMap(c=>c.points.map(p=>({v:p.id,t:`${c.label} ${c.group==='cram'?p.title:'ポイント'+p.no+' '+p.title}`}))):[];
   const i=list.findIndex(x=>x.v===r);
   if(i>=0){ const pg=$('#pager'); const a=list[i-1], b=list[i+1];
     pg.innerHTML=(a?`<a href="?r=${a.v}">← ${esc(a.t)}</a>`:'<span></span>')+(b?`<a href="?r=${b.v}">${esc(b.t)} →</a>`:'<span></span>'); pg.hidden=false; }

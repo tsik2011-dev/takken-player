@@ -171,6 +171,57 @@ body{margin:0}
 .pt.saved .pt-dur::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);margin-right:6px;vertical-align:2px}
 .loading .ic.big{opacity:.75}
 .field textarea{font-family:var(--f-num);font-size:11px;line-height:1.5;border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);padding:8px;width:100%}
+/* exam cram pack */
+.pack{border:1.5px solid var(--seal)}
+.pack .k{color:var(--seal);font-weight:700}
+.pack .cd{font-family:var(--f-num);font-weight:500;margin-left:8px;color:var(--ink);letter-spacing:0}
+.pack .btn.primary{background:var(--seal);border-color:var(--seal);color:var(--seal-ink)}
+.grp-head{margin-top:44px;padding:16px 0 6px;border-top:5px double var(--ink);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end}
+.grp-head .lab{font-size:12px;letter-spacing:.1em;color:var(--seal);display:block;font-weight:700}
+.grp-head h2{font-family:var(--f-display);font-size:24px;margin:2px 0 4px;line-height:1.3}
+.grp-head p{margin:0 0 4px;font-size:13px;color:var(--muted);line-height:1.65}
+.grp-head .meta{font-size:12px;color:var(--muted)}
+.seal.alt{background:var(--accent);color:var(--accent-ink);box-shadow:inset 0 0 0 2px var(--accent),inset 0 0 0 4px var(--accent-ink)}
+.pt-text p.qa{border-left:3px solid var(--line);padding-left:12px}
+.pt-text .s.q{font-weight:500;display:block;margin-bottom:2px}
+.pt-text .s.ans{display:inline-block;font-weight:700;margin:4px 10px 2px 0;padding:0 10px;border-radius:6px;background:var(--accent-soft);color:var(--accent);line-height:1.7}
+.pt-text .s.ans.ng{background:color-mix(in srgb,var(--seal) 14%,transparent);color:var(--seal)}
+/* quiz */
+body.noscroll{overflow:hidden}
+.quiz{position:fixed;inset:0;z-index:40;background:var(--paper);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.quiz-in{max-width:640px;margin:0 auto;padding:calc(14px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(40px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));display:grid;gap:18px}
+.quiz-top{display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:2px solid var(--ink);padding-bottom:10px}
+.quiz-top h3{margin:0;font-family:var(--f-display);font-size:21px}
+.quiz .field select{width:100%;font-size:15px;padding:10px;background:var(--sheet)}
+.quiz .btn{justify-content:center}
+.quiz .btn:disabled{opacity:.5}
+.qinfo{margin:0;font-size:13px;color:var(--muted);line-height:1.7}
+.qmeta{display:flex;justify-content:space-between;gap:12px;font-size:12.5px;color:var(--muted)}
+.qmeta span:first-child{min-width:0}
+.qbar{height:4px;background:var(--line);border-radius:2px;overflow:hidden}
+.qbar i{display:block;height:100%;width:0;background:var(--accent);transition:width .25s}
+.qtext{font-size:18.5px;line-height:1.85;margin:0;min-height:5.6em;font-weight:500;text-wrap:pretty}
+.qbtns{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.qb{font-family:var(--f-display);font-size:42px;line-height:1;min-height:88px;border-radius:14px;border:2px solid var(--line);background:var(--sheet);display:grid;place-items:center;gap:4px;padding:10px 0 8px}
+.qb small{font-family:var(--f-body);font-size:12px;color:var(--muted);font-weight:500}
+.qb.maru{color:var(--accent)} .qb.batsu{color:var(--seal)}
+.qb:disabled{cursor:default}
+.qb.right.maru{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.qb.right.batsu{background:var(--seal);border-color:var(--seal);color:var(--seal-ink)}
+.qb.right small{color:inherit;opacity:.85}
+.qb.miss{border-style:dashed;opacity:.55}
+.qres{display:grid;gap:12px;border-top:1px solid var(--line);padding-top:14px}
+.verdict{margin:0;font-size:17px;font-weight:700}
+.verdict .okc{color:var(--accent)} .verdict .ngc{color:var(--seal)}
+.expl{margin:0;font-size:16px;line-height:1.9}
+.qrow{display:flex;flex-wrap:wrap;gap:10px}
+.qrow .btn{flex:1 1 140px}
+.qstats{display:grid;font-size:13px}
+.qstats .r{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;border-bottom:1px solid var(--line);padding:8px 0}
+.qstats .r b{font-family:var(--f-num);font-weight:500}
+.score{font-size:24px;font-family:var(--f-display);margin:0}
+.kbd-hint{font-size:12px;color:var(--muted);margin:0}
+@media (hover:none){ .kbd-hint{display:none} }
 </style>
 </head>
 <body>
@@ -203,6 +254,16 @@ body{margin:0}
       <a class="btn" id="readLink2" href="read.html" target="_blank" rel="noopener" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4zM16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/></svg><span>Google の声で聞く<span class="sub">　画面を閉じても続く</span></span></a>
     </div>
     <p class="note">再生中にホームボタンで閉じたり画面をロックしたりしても、再生は続きます。通知やロック画面から一時停止・前後の項目へ移動できます。</p>
+    <div class="panel pack" id="packPanel" hidden>
+      <span class="k">試験直前パック<span class="cd" id="countdown"></span></span>
+      <div class="row"><button class="btn primary" id="bQuiz" type="button">○×一問一答に挑戦<span class="sub" id="bQuizSub"></span></button></div>
+      <div class="row">
+        <button class="btn" type="button" data-chgo="5">数字・期間まとめを聞く</button>
+        <button class="btn" type="button" data-chgo="6">法改正・最新統計を聞く</button>
+        <button class="btn" type="button" data-grpgo="drill">一問一答を音声で聞く</button>
+      </div>
+      <p>一問一答は、間違えた問題だけをくり返し解けます。音声版は、問題のあとに3秒の間があり、そのあと答えと理由が流れます。どれも画面を消したまま聞けます。</p>
+    </div>
     <div class="panel" id="installPanel" hidden>
       <span class="k">ホーム画面にインストール</span>
       <div class="row" id="installApk" hidden><a class="btn primary" href="takken-player.apk" download>Android アプリ版をダウンロード</a></div>
@@ -224,7 +285,7 @@ body{margin:0}
     </div>
   </header>
   <main id="list"></main>
-  <footer>音声は合成音声です（HTS voice “Mei” / Open JTalk）。統計の数字は最新の「法改正レジュメ」で確認してください。</footer>
+  <footer>音声は合成音声です（HTS voice “Mei” / Open JTalk）。2026年試験の統計の数字は「直前対策 → 2026年 法改正・最新統計」にまとめてあります。一問一答と直前対策は、レジュメの内容と2026年4月1日時点の法令にもとづいて作成しました。</footer>
 </div>
 
 <div class="player" id="player">
@@ -286,6 +347,39 @@ body{margin:0}
       <p id="forgetNote">削除すると、次に開くときに合言葉が必要になります。</p></div>
   </div>
 </div>
+<div class="quiz" id="quiz" hidden>
+  <div class="quiz-in" role="dialog" aria-modal="true" aria-labelledby="quizH">
+    <div class="quiz-top"><h3 id="quizH">○×一問一答</h3><button class="chip" id="quizClose" type="button">閉じる</button></div>
+    <div id="qSetup" class="quiz-in" style="padding:0;gap:16px">
+      <div class="field"><span class="k">出題範囲</span><select id="qRange" aria-label="出題範囲"></select></div>
+      <div class="field"><span class="k">出題する問題</span>
+        <div class="row"><div class="seg" role="group" aria-label="出題する問題" id="qFilter"><button type="button" data-f="all" aria-pressed="true">すべて</button><button type="button" data-f="wrong" aria-pressed="false">間違えた問題</button><button type="button" data-f="new" aria-pressed="false">まだ解いていない問題</button></div></div></div>
+      <div class="field"><span class="k">順番</span>
+        <div class="row"><div class="seg" role="group" aria-label="順番" id="qOrder"><button type="button" data-o="seq" aria-pressed="true">レジュメの順</button><button type="button" data-o="rand" aria-pressed="false">ランダム</button></div></div></div>
+      <p class="qinfo" id="qInfo"></p>
+      <button class="btn primary" id="qStart" type="button">はじめる</button>
+      <div class="field"><span class="k">これまでの成績（最後に解いたときの結果）</span><div class="qstats" id="qStats"></div>
+        <div class="row"><button class="chip" id="qReset" type="button">成績をリセット</button><span class="pos" id="qResetNote"></span></div></div>
+    </div>
+    <div id="qCard" hidden style="display:grid;gap:16px">
+      <div class="qmeta"><span id="qWhere"></span><span class="num" id="qProg"></span></div>
+      <div class="qbar" aria-hidden="true"><i id="qBar"></i></div>
+      <p class="qtext" id="qText" tabindex="-1"></p>
+      <div class="qbtns"><button class="qb maru" type="button" data-ans="1" aria-label="○ 正しい">○<small>正しい</small></button><button class="qb batsu" type="button" data-ans="0" aria-label="× 誤り">×<small>誤り</small></button></div>
+      <p class="kbd-hint">キーボード：O で○、X で×、Enter で次へ</p>
+      <div class="qres" id="qRes" hidden aria-live="polite">
+        <p class="verdict" id="qVerdict"></p>
+        <p class="expl" id="qExpl"></p>
+        <div class="qrow"><button class="btn primary" id="qNext" type="button">次の問題</button><button class="btn" id="qEnd" type="button">ここで終える</button></div>
+      </div>
+    </div>
+    <div id="qDone" hidden style="display:grid;gap:16px">
+      <p class="score" id="qScore"></p>
+      <p class="qinfo" id="qDoneNote"></p>
+      <div class="qrow"><button class="btn primary" id="qRetry" type="button">間違えた問題をもう一度</button><button class="btn" id="qBack" type="button">範囲を選び直す</button></div>
+    </div>
+  </div>
+</div>
 <div class="toast" id="toast" hidden></div>
 </div>
 
@@ -294,9 +388,11 @@ body{margin:0}
 'use strict';
 const $=s=>document.querySelector(s);
 const SEAL={1:'民',2:'宅',3:'法',4:'他'};
+const sealOf=ch=>ch.seal||SEAL[ch.no]||'宅';
 const SPEEDS=[0.8,1,1.2,1.4,1.6,1.8,2];
 const PACK='tkp-pack-v1';
-const LS_PREF='tkp-prefs-v1', LS_POS='tkp-pos-v1', LS_PASS='tkp-pass-v1';
+const LS_PREF='tkp-prefs-v1', LS_POS='tkp-pos-v1', LS_PASS='tkp-pass-v1', LS_DRILL='tkp-drill-v1', LS_QPREF='tkp-quiz-v1';
+const EXAM=new Date('2026-10-18T13:00:00+09:00');
 const SILENCE='silence.mp3';
 const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const STANDALONE=matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
@@ -379,16 +475,19 @@ function unlockFlow(){
 
 /* ---------- player ---------- */
 function start(PAYLOAD){
-const DATA=PAYLOAD.chapters, FIXES=PAYLOAD.fixes;
+const DATA=PAYLOAD.chapters, FIXES=PAYLOAD.fixes, DRILL=PAYLOAD.drill||null;
 const tracks=[];
 DATA.forEach((ch,ci)=>ch.points.forEach((p,pi)=>{
-  const sents=[]; p.paras.forEach((para,ai)=>para.forEach(s=>sents.push({t:s.t,s:s.s,a:ai})));
-  tracks.push(Object.assign({},p,{ci,pi,ch,sents,idx:tracks.length,exempt:ch.no===4&&p.no>=4,url:'pack/'+p.id+'.bin'}));
+  const sents=[]; p.paras.forEach((para,ai)=>para.forEach(s=>sents.push({t:s.t,s:s.s,v:s.v,w:s.w,a:ai})));
+  tracks.push(Object.assign({},p,{ci,pi,ch,sents,idx:tracks.length,grp:ch.group||'main',exempt:p.exempt!=null?!!p.exempt:(ch.no===4&&p.no>=4),url:'pack/'+p.id+'.bin'+(p.v?'?v='+p.v:'')}));
 }));
 const byId=Object.fromEntries(tracks.map(t=>[t.id,t]));
+const GROUPS={main:{name:'レジュメ本編'},cram:{name:'直前対策',desc:'試験に出る数字・期間と、2026年試験の法改正・最新統計をまとめて聞けます。'},
+  drill:{name:'一問一答（音声）',desc:'問題を読み上げたあと3秒の間を置いて、答えと理由を読み上げます。画面を見ずに解けます。'}};
+const grpTracks=g=>tracks.filter(t=>t.grp===g);
 if(NATIVE){ try{ NATIVE.configure(JSON.stringify({app:'matome',meta:new URL('pack/meta.json',location.href).href,base:new URL('pack/',location.href).href,
   tracks:tracks.map(t=>({id:t.id,title:`P${t.no} ${t.title}`,chap:`${t.ch.label} ${t.ch.title}`,file:t.id+'.bin',dur:t.dur}))})); }catch(e){} }
-function queueFor(i){ if(st.scope==='point') return [i]; if(st.scope==='chapter'){ const ci=tracks[i].ci; return tracks.filter(t=>t.ci===ci).map(t=>t.idx); } return tracks.map(t=>t.idx); }
+function queueFor(i){ if(st.scope==='point') return [i]; if(st.scope==='chapter'){ const ci=tracks[i].ci; return tracks.filter(t=>t.ci===ci).map(t=>t.idx); } return grpTracks(tracks[i].grp).map(t=>t.idx); }
 function sendQueue(){ if(!NATIVE||st.cur<0) return; try{ NATIVE.setQueue(JSON.stringify(queueFor(st.cur)),!!st.repeat); }catch(e){} }
 let nstate={}, firstPoll=true, lastMask='';
 function nativeKick(){ setTimeout(poll,120); setTimeout(poll,450); }
@@ -399,16 +498,25 @@ st.cur=-1; st.sent=-1; st.playing=false; st.sleepAt=0; st.sleepPt=false;
 const savePrefs=()=>lsSet(LS_PREF,{scope:st.scope,repeat:st.repeat,speed:st.speed,follow:st.follow,mode:st.mode,voice:st.voice});
 
 /* list */
-const totalDur=tracks.reduce((a,t)=>a+t.dur,0);
-$('#stats').innerHTML=`<span><b>${DATA.length}</b> 章</span><span><b>${tracks.length}</b> ポイント</span><span>全体 <b>${fmtJ(totalDur)}</b>（1.0倍速）</span>`;
+const mainTracks=grpTracks('main');
+const totalDur=mainTracks.reduce((a,t)=>a+t.dur,0);
+$('#stats').innerHTML=`<span><b>${DATA.filter(c=>!c.group||c.group==='main').length}</b> 章</span><span><b>${mainTracks.length}</b> ポイント</span><span>全体 <b>${fmtJ(totalDur)}</b>（1.0倍速）</span>`;
 const list=$('#list');
 const playSvg='<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.5 4.5v15l12-7.5z"/></svg>';
 const pauseSvg='<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6.5 4.5h4v15h-4zM13.5 4.5h4v15h-4z"/></svg>';
+const seenGrp=new Set();
 DATA.forEach((ch,ci)=>{
+  const g=ch.group||'main';
+  if(g!=='main'&&!seenGrp.has(g)){ seenGrp.add(g); const gt=grpTracks(g); const gd=gt.reduce((a,t)=>a+t.dur,0);
+    const head=document.createElement('div'); head.className='grp-head'; head.id='grp-'+g;
+    head.innerHTML=`<div><span class="lab">試験直前パック</span><h2>${esc(GROUPS[g].name)}</h2><p>${esc(GROUPS[g].desc)}</p><span class="meta">${gt.length}トラック・${fmtJ(gd)}${g==='drill'&&DRILL?'・'+Object.values(DRILL).reduce((a,v)=>a+v.length,0)+'問':''}</span></div>
+      <button class="btn ch-play" type="button" data-grpplay="${g}">${playSvg}すべて再生</button>`;
+    list.appendChild(head); }
   const ts=tracks.filter(t=>t.ci===ci); const d=ts.reduce((a,t)=>a+t.dur,0);
-  const sec=document.createElement('section'); sec.className='chapter'; sec.id='ch'+ch.no;
-  sec.innerHTML=`<div class="ch-head"><div class="seal" aria-hidden="true">${SEAL[ch.no]}</div>
-    <div class="ch-title"><span class="lab">${esc(ch.label)}</span><h2>${esc(ch.title)}</h2><span class="meta">${ts.length}ポイント・${fmtJ(d)}</span></div>
+  const nq=g==='drill'?ts.reduce((a,t)=>a+(t.count||0),0):0;
+  const sec=document.createElement('section'); sec.className='chapter grp-'+g; sec.id='ch'+ch.no;
+  sec.innerHTML=`<div class="ch-head"><div class="seal${g!=='main'?' alt':''}" aria-hidden="true">${esc(sealOf(ch))}</div>
+    <div class="ch-title"><span class="lab">${esc(ch.label)}</span><h2>${esc(ch.title)}</h2><span class="meta">${ts.length}${g==='cram'?'トラック':'ポイント'}${nq?'・'+nq+'問':''}・${fmtJ(d)}</span></div>
     <button class="btn ch-play" type="button" data-chplay="${ci}">${playSvg}この章を再生</button></div>
     <ol class="points">${ts.map(t=>`<li class="pt" id="${t.id}" data-i="${t.idx}">
       <div class="pt-row"><button class="pt-open" type="button" data-open="${t.idx}" aria-expanded="false" aria-controls="tx-${t.id}">
@@ -421,7 +529,9 @@ const liOf=i=>document.getElementById(tracks[i].id);
 const textOf=i=>document.getElementById('tx-'+tracks[i].id);
 function renderText(i){
   const box=textOf(i); if(box.dataset.r) return box; const t=tracks[i];
-  let k=0; box.innerHTML='<div class="hint">文をタップすると、そこから再生します。</div>'+t.paras.map(p=>'<p>'+p.map(s=>`<span class="s" tabindex="0" data-k="${k++}">${esc(s.s)}</span>`).join('')+'</p>').join('');
+  let k=0; const dr=t.grp==='drill';
+  const cls=s=>!dr?'':s.w?' q':(s.v&&/^答え/.test(s.s))?(' ans '+(s.s.includes('○')?'ok':'ng')):'';
+  box.innerHTML='<div class="hint">文をタップすると、そこから再生します。</div>'+t.paras.map(p=>'<p'+(dr?' class="qa"':'')+'>'+p.map(s=>`<span class="s${cls(s)}" tabindex="0" data-k="${k++}">${esc(s.s)}</span>`).join('')+'</p>').join('');
   box.dataset.r='1'; return box;
 }
 const autoOpened=new Set();
@@ -464,7 +574,7 @@ function nextIndex(i){
   const t=tracks[i]; if(!t) return null;
   if(st.scope==='point') return st.repeat?i:null;
   if(st.scope==='chapter'){ const n=tracks[i+1]; if(n&&n.ci===t.ci) return i+1; return st.repeat?tracks.findIndex(x=>x.ci===t.ci):null; }
-  if(i+1<tracks.length) return i+1; return st.repeat?0:null;
+  const n=tracks[i+1]; if(n&&n.grp===t.grp) return i+1; return st.repeat?tracks.findIndex(x=>x.grp===t.grp):null;
 }
 function applyRate(){ if(!audio) return; audio.defaultPlaybackRate=st.speed; audio.playbackRate=st.speed; try{ audio.preservesPitch=true; }catch(e){} }
 function setLoading(on){ document.body.classList.toggle('loading',on); }
@@ -648,12 +758,12 @@ function speakStep(tok){
     const n=nextIndex(st.cur); if(n==null){ speechStop(); toast('再生が終わりました'); return; }
     const prev=st.cur; st.cur=n; st.sent=-1; trackChanged(prev,prev!==n); spk.k=0; spk.head=true; t=tracks[n];
   }
-  let text;
-  if(spk.head){ text=(t.pi===0?`${t.ch.label}、${t.ch.title}。`:'')+`ポイント${t.no}、${t.title}。`; }
-  else { text=t.sents[spk.k].s; setSent(spk.k); updateProgress(t.sents[spk.k].t); }
+  let text, wait=0;
+  if(spk.head){ text=t.head||((t.pi===0?`${t.ch.label}、${t.ch.title}。`:'')+`ポイント${t.no}、${t.title}。`); }
+  else { const se=t.sents[spk.k]; text=se.v||se.s; wait=se.w?se.w*1000/Math.max(.5,st.speed):0; setSent(spk.k); updateProgress(se.t); }
   const u=new SpeechSynthesisUtterance(norm(text)); u.lang='ja-JP';
   const v=voices.find(x=>x.name===st.voice)||voices[0]; if(v) u.voice=v; u.rate=Math.min(2,Math.max(.5,st.speed));
-  const done=()=>{ if(tok!==spk.tok) return; if(spk.head) spk.head=false; else spk.k++; checkSleep(); savePos(false); speakStep(tok); };
+  const done=()=>{ if(tok!==spk.tok) return; if(spk.head) spk.head=false; else spk.k++; checkSleep(); savePos(false); if(wait) setTimeout(()=>speakStep(tok),wait); else speakStep(tok); };
   u.onend=done; u.onerror=e=>{ if(e&&(e.error==='interrupted'||e.error==='canceled')) return; done(); };
   synth.speak(u);
 }
@@ -688,6 +798,7 @@ let trapArmed=false;
 function armBackTrap(){ if(trapArmed) return; try{ history.pushState({tkp:'stay'},'',location.href); trapArmed=true; }catch(e){} }
 addEventListener('popstate',()=>{
   trapArmed=false;
+  if(!$('#quiz').hidden){ closeQuiz(true); if(isPlaying()) armBackTrap(); return; }
   if(!$('#sheet').hidden){ $('#sheet').hidden=true; if(isPlaying()) armBackTrap(); return; }
   if(isPlaying()){ armBackTrap(); toast('再生中は「戻る」では閉じません。ホームボタンで閉じれば、そのまま再生が続きます'); }
 });
@@ -699,9 +810,9 @@ function setPlayingUI(on){
 }
 function updateNow(){
   const t=tracks[st.cur]; if(!t) return;
-  const s=$('#nowSeal'); s.textContent=SEAL[t.ch.no]; s.classList.remove('idle');
+  const s=$('#nowSeal'); s.textContent=sealOf(t.ch); s.classList.remove('idle');
   $('#nowT').textContent=`P${t.no} ${t.title}`; $('#nowS').textContent=`${t.ch.label} ${t.ch.title}`;
-  $('#nowPos').textContent=`${t.idx+1}/${tracks.length}`;
+  const gt=grpTracks(t.grp); $('#nowPos').textContent=`${gt.indexOf(t)+1}/${gt.length}`;
   setReadLinks();
 }
 function setReadLinks(){ const t=tracks[st.cur]; const h='read.html'+(t?'?r=c'+t.ch.no:''); $('#readLink').href=h; $('#readLink2').href=h; }
@@ -730,8 +841,8 @@ function savePos(force){ const now=Date.now(); if(!force&&now-lastSave<4000) ret
 /* ---------- media session ---------- */
 const ART={1:'icons/icon-512.png',2:'icons/icon-512.png',3:'icons/icon-512.png',4:'icons/icon-512.png'};
 function setMeta(t){ if(!('mediaSession' in navigator)) return; try{
-  navigator.mediaSession.metadata=new MediaMetadata({title:`P${t.no} ${t.title}`,artist:`${t.ch.label} ${t.ch.title}`,album:'宅建 スマートまとめレジュメ',
-    artwork:[{src:new URL(ART[t.ch.no],location.href).href,sizes:'512x512',type:'image/png'}]}); }catch(e){} }
+  navigator.mediaSession.metadata=new MediaMetadata({title:`P${t.no} ${t.title}`,artist:`${t.ch.label} ${t.ch.title}`,album:t.grp==='main'?'宅建 スマートまとめレジュメ':'宅建 試験直前パック',
+    artwork:[{src:new URL(ART[t.ch.no]||'icons/icon-512.png',location.href).href,sizes:'512x512',type:'image/png'}]}); }catch(e){} }
 function posState(){ if(!('mediaSession' in navigator)||!navigator.mediaSession.setPositionState||st.mode!=='audio'||!srcFor) return;
   let d,p; if(srcFor==='mse'){ if(!S||!S.cur) return; d=S.cur.end-S.cur.start; p=mseLocal(); } else { d=audio.duration; p=audio.currentTime; }
   if(!isFinite(d)||d<=0) return; try{ navigator.mediaSession.setPositionState({duration:d,playbackRate:audio.playbackRate||1,position:Math.max(0,Math.min(p,d))}); }catch(e){} }
@@ -793,8 +904,9 @@ $('#bBack').addEventListener('click',()=>skip(-15)); $('#bFwd').addEventListener
 $('#bPrev').addEventListener('click',prev); $('#bNext').addEventListener('click',next);
 $('#playAll').addEventListener('click',()=>{ setScope('all'); playTrack(0,0,true); });
 list.addEventListener('click',e=>{
-  const b=e.target.closest('[data-play],[data-open],[data-chplay],.s'); if(!b) return;
+  const b=e.target.closest('[data-play],[data-open],[data-chplay],[data-grpplay],.s'); if(!b) return;
   if(b.dataset.chplay!=null){ setScope('chapter'); playTrack(tracks.findIndex(t=>t.ci===+b.dataset.chplay),0,true); return; }
+  if(b.dataset.grpplay!=null){ setScope('all'); playTrack(tracks.findIndex(t=>t.grp===b.dataset.grpplay),0,true); return; }
   if(b.dataset.play!=null){ const i=+b.dataset.play; if(i===st.cur&&isPlaying()) pause(); else if(i===st.cur) toggle(); else playTrack(i,0,true); return; }
   if(b.dataset.open!=null){ const i=+b.dataset.open; setOpen(i,textOf(i).hidden,false); return; }
   if(b.classList.contains('s')){ const i=+b.closest('.pt').dataset.i; const k=+b.dataset.k; const t=tracks[i];
@@ -839,6 +951,7 @@ $('#bForget').addEventListener('click',async()=>{
   pause(); if(NATIVE){ try{ NATIVE.forget(); }catch(e){} } await kv('del','key'); lsDel(LS_PASS); try{ await caches.delete(PACK); }catch(e){} location.reload();
 });
 addEventListener('keydown',e=>{
+  if(!$('#quiz').hidden){ quizKey(e); return; }
   if(e.key==='Escape'&&!$('#sheet').hidden){ $('#sheet').hidden=true; return; }
   if(e.target.closest('input,select,textarea,button,.s')) return;
   if(e.code==='Space'){ e.preventDefault(); toggle(); } else if(e.key==='ArrowLeft') skip(-5); else if(e.key==='ArrowRight') skip(5);
@@ -853,6 +966,108 @@ document.addEventListener('visibilitychange',()=>{
   if(st.cur>=0&&st.sent>=0&&st.follow){ const el=textOf(st.cur).querySelector('.s.now'); if(el) scrollToEl(el,'center'); }
 });
 addEventListener('pageshow',e=>{ if(e.persisted&&IOS) needFresh=true; });
+
+/* ---------- exam cram pack: ○× quiz ---------- */
+const qrec=lsGet(LS_DRILL)||{};
+const qp=Object.assign({range:'all',filter:'all',order:'seq'},lsGet(LS_QPREF)||{});
+const MAIN=DATA.filter(c=>!c.group||c.group==='main');
+const qItems=[];
+if(DRILL) MAIN.forEach(ch=>ch.points.forEach(p=>(DRILL[p.id]||[]).forEach((x,k)=>qItems.push({id:p.id+'-'+(k+1),ch,p,a:x[0]?1:0,q:x[1],e:x[2]}))));
+const Q={list:[],pos:0,ok:0,ng:0,wrongs:[],answered:false};
+const qIn=(it,r)=>r==='all'||r==='c'+it.ch.no||r===it.p.id;
+const qWrong=it=>!!qrec[it.id]&&qrec[it.id][0]===0, qNew=it=>!qrec[it.id];
+function qPool(){ return qItems.filter(it=>qIn(it,qp.range)&&(qp.filter==='all'||(qp.filter==='wrong'?qWrong(it):qNew(it)))); }
+function qSavePrefs(){ lsSet(LS_QPREF,qp); }
+function qView(v){ ['qSetup','qCard','qDone'].forEach(id=>$('#'+id).hidden=id!==v); $('#quiz').scrollTop=0; }
+function qRenderSetup(){
+  const sel=$('#qRange');
+  if(!sel.dataset.r){ sel.dataset.r='1';
+    sel.innerHTML=`<option value="all">全範囲（${qItems.length}問）</option>`+MAIN.map(ch=>{ const n=qItems.filter(it=>it.ch===ch).length; return `<option value="c${ch.no}">${esc(ch.label)} ${esc(ch.title)}（${n}問）</option>`; }).join('')
+      +MAIN.map(ch=>`<optgroup label="${esc(ch.label)} ${esc(ch.title)}">`+ch.points.map(p=>`<option value="${p.id}">P${p.no} ${esc(p.title)}（${(DRILL[p.id]||[]).length}問）</option>`).join('')+'</optgroup>').join(''); }
+  if(![...sel.options].some(o=>o.value===qp.range)) qp.range='all';
+  sel.value=qp.range;
+  document.querySelectorAll('#qFilter [data-f]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.f===qp.filter)));
+  document.querySelectorAll('#qOrder [data-o]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.o===qp.order)));
+  const all=qItems.filter(it=>qIn(it,qp.range)), wrong=all.filter(qWrong).length, fresh=all.filter(qNew).length, ok=all.length-wrong-fresh;
+  $('#qInfo').textContent=`この範囲は ${all.length}問。正解した問題 ${ok}問・間違えたままの問題 ${wrong}問・まだ解いていない問題 ${fresh}問。`;
+  const n=qPool().length; const b=$('#qStart'); b.disabled=!n;
+  b.textContent=n?`${n}問をはじめる`:qp.filter==='wrong'?'間違えたままの問題はありません':'まだ解いていない問題はありません';
+  $('#qStats').innerHTML=MAIN.map(ch=>{ const its=qItems.filter(it=>it.ch===ch); const done=its.filter(it=>qrec[it.id]); const ok=done.filter(it=>qrec[it.id][0]===1).length;
+    return `<div class="r"><span>${esc(ch.label)} ${esc(ch.title)}</span><span>${done.length}/${its.length}問 解答・<b>${done.length?Math.round(ok/done.length*100)+'%':'—'}</b></span></div>`; }).join('');
+}
+function qShuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function qStart(list){
+  if(!list.length) return; Q.list=qp.order==='rand'?qShuffle(list.slice()):list.slice(); Q.pos=0; Q.ok=0; Q.ng=0; Q.wrongs=[];
+  qView('qCard'); qShow();
+}
+function qShow(){
+  const it=Q.list[Q.pos]; Q.answered=false;
+  $('#qWhere').textContent=`${it.ch.label} P${it.p.no} ${it.p.title}`; $('#qProg').textContent=`${Q.pos+1} / ${Q.list.length}`;
+  $('#qBar').style.width=(Q.pos/Q.list.length*100)+'%';
+  $('#qText').textContent=it.q; $('#qRes').hidden=true;
+  document.querySelectorAll('.qb').forEach(b=>{ b.disabled=false; b.classList.remove('right','miss'); });
+  $('#quiz').scrollTop=0; try{ $('#qText').focus({preventScroll:true}); }catch(e){}
+}
+function qAnswer(v){
+  if(Q.answered||$('#qCard').hidden) return; Q.answered=true; const it=Q.list[Q.pos]; const right=v===it.a;
+  const r=qrec[it.id]||[0,0,0]; r[0]=right?1:0; r[1]++; if(!right) r[2]++; qrec[it.id]=r; lsSet(LS_DRILL,qrec);
+  if(right) Q.ok++; else { Q.ng++; Q.wrongs.push(it); }
+  document.querySelectorAll('.qb').forEach(b=>{ b.disabled=true; const a=+b.dataset.ans; if(a===it.a) b.classList.add('right'); else if(a===v) b.classList.add('miss'); });
+  $('#qVerdict').innerHTML=(right?'<span class="okc">正解</span>':'<span class="ngc">不正解</span>')+`　答えは ${it.a?'○':'×'}`;
+  $('#qExpl').textContent=it.e; $('#qRes').hidden=false; $('#qBar').style.width=((Q.pos+1)/Q.list.length*100)+'%';
+  $('#qNext').textContent=Q.pos+1<Q.list.length?'次の問題':'結果を見る';
+  try{ $('#qNext').focus({preventScroll:true}); }catch(e){}
+  try{ $('#qRes').scrollIntoView({block:'nearest',behavior:reduced?'auto':'smooth'}); }catch(e){}
+}
+function qNextQ(){ if(!Q.answered) return; Q.pos++; if(Q.pos>=Q.list.length) qFinish(); else qShow(); }
+function qFinish(){
+  const n=Q.ok+Q.ng; if(!n){ qRenderSetup(); qView('qSetup'); return; }
+  qView('qDone'); const pct=Math.round(Q.ok/n*100);
+  $('#qScore').textContent=`${n}問中 ${Q.ok}問 正解（${pct}%）`;
+  $('#qDoneNote').textContent=Q.ng?`間違えた ${Q.ng}問は「間違えた問題」に入りました。正解するまで、くり返し出題できます。`:'全問正解です。この範囲は仕上がっています。';
+  $('#qRetry').hidden=!Q.ng; updatePackSub();
+}
+function openQuiz(){
+  if(!qItems.length) return; armBackTrap(); qRenderSetup(); qView('qSetup'); $('#quiz').hidden=false; document.body.classList.add('noscroll');
+  try{ $('#qRange').focus({preventScroll:true}); }catch(e){}
+}
+function closeQuiz(){ $('#quiz').hidden=true; document.body.classList.remove('noscroll'); updatePackSub(); }
+function quizKey(e){
+  if(e.key==='Escape'){ closeQuiz(); return; }
+  if($('#qCard').hidden||e.target.closest('select')) return;
+  const k=e.key.toLowerCase();
+  if(!Q.answered&&(k==='o'||k==='1'||k==='○')){ e.preventDefault(); qAnswer(1); }
+  else if(!Q.answered&&(k==='x'||k==='2'||k==='×')){ e.preventDefault(); qAnswer(0); }
+  else if(Q.answered&&(e.key==='Enter'||e.key===' ')&&!e.target.closest('button')){ e.preventDefault(); qNextQ(); }
+}
+function updatePackSub(){ if(!qItems.length) return; const w=qItems.filter(qWrong).length, d=qItems.filter(it=>qrec[it.id]).length;
+  $('#bQuizSub').textContent=`　${qItems.length}問`+(d?`・解答 ${d}`:'')+(w?`・要復習 ${w}`:''); }
+$('#bQuiz').addEventListener('click',openQuiz);
+$('#quizClose').addEventListener('click',closeQuiz);
+$('#qRange').addEventListener('change',e=>{ qp.range=e.target.value; qSavePrefs(); qRenderSetup(); });
+$('#qFilter').addEventListener('click',e=>{ const b=e.target.closest('[data-f]'); if(!b) return; qp.filter=b.dataset.f; qSavePrefs(); qRenderSetup(); });
+$('#qOrder').addEventListener('click',e=>{ const b=e.target.closest('[data-o]'); if(!b) return; qp.order=b.dataset.o; qSavePrefs(); qRenderSetup(); });
+$('#qStart').addEventListener('click',()=>qStart(qPool()));
+document.querySelectorAll('.qb').forEach(b=>b.addEventListener('click',()=>qAnswer(+b.dataset.ans)));
+$('#qNext').addEventListener('click',qNextQ);
+$('#qEnd').addEventListener('click',qFinish);
+$('#qRetry').addEventListener('click',()=>{ const w=Q.wrongs.slice(); qStart(w); });
+$('#qBack').addEventListener('click',()=>{ qRenderSetup(); qView('qSetup'); });
+let resetArmed=0;
+$('#qReset').addEventListener('click',()=>{
+  if(Date.now()-resetArmed>4000){ resetArmed=Date.now(); $('#qResetNote').textContent='もう一度押すと、すべての成績を消します'; return; }
+  for(const k in qrec) delete qrec[k]; lsSet(LS_DRILL,qrec); $('#qResetNote').textContent='成績を消しました'; qRenderSetup(); updatePackSub(); });
+/* pack panel */
+if(qItems.length||tracks.some(t=>t.grp!=='main')){
+  $('#packPanel').hidden=false; $('#bQuiz').hidden=!qItems.length; updatePackSub();
+  const today=new Date(); const d0=new Date(today.getFullYear(),today.getMonth(),today.getDate()); const ex=new Date(2026,9,18);
+  const days=Math.round((ex-d0)/86400000);
+  $('#countdown').textContent=days>0?`本試験 10月18日（日）まで あと${days}日`:days===0?'本試験は今日です。落ち着いていきましょう':'';
+  document.querySelectorAll('[data-chgo]').forEach(b=>{ const i=tracks.findIndex(t=>t.ch.no===+b.dataset.chgo); if(i<0){ b.hidden=true; return; }
+    b.addEventListener('click',()=>{ setScope('chapter'); playTrack(i,0,true); }); });
+  document.querySelectorAll('[data-grpgo]').forEach(b=>{ const i=tracks.findIndex(t=>t.grp===b.dataset.grpgo); if(i<0){ b.hidden=true; return; }
+    b.addEventListener('click',()=>{ setScope('all'); playTrack(i,0,true); }); });
+}
 
 /* ---------- init ---------- */
 setScope(st.scope); setRepeat(st.repeat); if(!SPEEDS.includes(st.speed)) st.speed=1; setSpeed(st.speed);

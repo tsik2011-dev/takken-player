@@ -1,8 +1,8 @@
 /* 宅建まとめ 読み上げ — service worker
    shell: network-first (3s timeout) with cache fallback, so updates arrive when online
-   pack/*.bin audio: cache-first, saved as it is played or downloaded
+   pack/*.bin audio: cache-first (exact URL, so a ?v= version bump fetches the new file), saved as it is played or downloaded
    fonts: cache-first */
-const VERSION = 'v2';
+const VERSION = 'v3';
 const SHELL = 'tkp-shell-' + VERSION;
 const PACK = 'tkp-pack-v1';
 const FONTS = 'tkp-fonts';
@@ -34,9 +34,9 @@ async function networkFirst(req, cacheName) {
   }
 }
 
-async function cacheFirst(req, cacheName, opaqueOk) {
+async function cacheFirst(req, cacheName, opaqueOk, exact) {
   const c = await caches.open(cacheName);
-  const hit = await c.match(req, { ignoreSearch: true });
+  const hit = await c.match(req, { ignoreSearch: !exact });
   if (hit) return hit;
   const r = await fetch(req);
   if (r.ok || (opaqueOk && r.type === 'opaque')) c.put(req, r.clone());
@@ -49,7 +49,7 @@ self.addEventListener('fetch', e => {
   const url = new URL(req.url);
   if (url.origin === location.origin) {
     if (url.pathname.includes('/smart/') || url.pathname.endsWith('.apk')) return;
-    if (/\/pack\/c\d+p\d+\.bin$/.test(url.pathname)) { e.respondWith(cacheFirst(req, PACK)); return; }
+    if (/\/pack\/c\d+p\d+\.bin$/.test(url.pathname)) { e.respondWith(cacheFirst(req, PACK, false, true)); return; }  // ?v= marks a new version of a track
     if (url.pathname.includes('/pack/')) { e.respondWith(networkFirst(req, PACK)); return; }
     e.respondWith(networkFirst(req, SHELL));
     return;
