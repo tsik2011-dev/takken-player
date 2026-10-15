@@ -202,6 +202,8 @@ body{margin:0}
     </div>
     <div class="panel" id="installPanel" hidden>
       <span class="k">ホーム画面にインストール</span>
+      <div class="row" id="installApk" hidden><a class="btn primary" href="takken-player.apk" download>Android アプリ版をダウンロード</a></div>
+      <p id="installApkNote" hidden></p>
       <div class="row" id="installAndroid" hidden><button class="btn primary" id="bInstall" type="button">アプリとしてインストール</button></div>
       <ol class="ios-steps" id="installIos" hidden>
         <li>画面下の<b>共有ボタン</b>（□に↑）をタップ</li>
@@ -293,6 +295,9 @@ const STANDALONE=matchMedia('(display-mode: standalone)').matches||navigator.sta
 const UA=navigator.userAgent;
 const IOS=/iP(hone|ad|od)/.test(UA)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 const INAPP=/Line\/|FBAN|FBAV|Instagram|Claude/i.test(UA);
+const ANDROID=/Android/i.test(UA);
+const NATIVE=(window.TakkenNative&&typeof window.TakkenNative.getState==='function')?window.TakkenNative:null;
+function nativeHasPass(){ try{ return !!JSON.parse(NATIVE.getState()).hasPass; }catch(e){ return false; } }
 
 function lsGet(k){ try{ return JSON.parse(localStorage.getItem(k)||'null'); }catch(e){ return null; } }
 function lsSet(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
@@ -334,6 +339,7 @@ async function boot(){
   catch(e){ $('#boot').innerHTML='<div>最初の起動にはインターネット接続が必要です。<br>接続してから開き直してください。</div>'; return; }
   let key=await kv('get','key'); let data=null;
   if(!key){ const p=lsGet(LS_PASS); if(p){ try{ key=await deriveKey(p); }catch(e){} } }
+  if(key&&NATIVE&&!nativeHasPass()) key=null;
   if(key){ try{ data=await loadData(key); KEY=key; }catch(e){ if(!e.badpass){ $('#boot').innerHTML='<div>データを読み込めませんでした。<br>通信状態を確認して、開き直してください。</div>'; return; } key=null; } }
   if(!data) data=await unlockFlow();
   $('#boot').hidden=true; $('#lock').hidden=true; $('#app').hidden=false;
@@ -347,7 +353,7 @@ function unlockFlow(){
     async function tryOpen(){
       const pass=inp.value; if(!cleanPass(pass)){ err.textContent='合言葉を入力してください'; return; }
       err.textContent=''; btn.disabled=true; btn.textContent='確認しています…';
-      try{ const key=await deriveKey(pass); const data=await loadData(key); KEY=key; await rememberKey(key,pass); resolve(data); }
+      try{ const key=await deriveKey(pass); const data=await loadData(key); KEY=key; await rememberKey(key,pass); if(NATIVE){ try{ NATIVE.unlock(cleanPass(pass)); }catch(e){} } resolve(data); }
       catch(e){ err.textContent=e.badpass?'合言葉が違います。もう一度確かめてください':'通信できませんでした。接続を確認してください'; }
       btn.disabled=false; btn.textContent='開く';
     }
@@ -365,6 +371,12 @@ DATA.forEach((ch,ci)=>ch.points.forEach((p,pi)=>{
   tracks.push(Object.assign({},p,{ci,pi,ch,sents,idx:tracks.length,exempt:ch.no===4&&p.no>=4,url:'pack/'+p.id+'.bin'}));
 }));
 const byId=Object.fromEntries(tracks.map(t=>[t.id,t]));
+if(NATIVE){ try{ NATIVE.configure(JSON.stringify({app:'matome',meta:new URL('pack/meta.json',location.href).href,base:new URL('pack/',location.href).href,
+  tracks:tracks.map(t=>({id:t.id,title:`P${t.no} ${t.title}`,chap:`${t.ch.label} ${t.ch.title}`,file:t.id+'.bin',dur:t.dur}))})); }catch(e){} }
+function queueFor(i){ if(st.scope==='point') return [i]; if(st.scope==='chapter'){ const ci=tracks[i].ci; return tracks.filter(t=>t.ci===ci).map(t=>t.idx); } return tracks.map(t=>t.idx); }
+function sendQueue(){ if(!NATIVE||st.cur<0) return; try{ NATIVE.setQueue(JSON.stringify(queueFor(st.cur)),!!st.repeat); }catch(e){} }
+let nstate={}, firstPoll=true, lastMask='';
+function nativeKick(){ setTimeout(poll,120); setTimeout(poll,450); }
 const sizeOf=Object.fromEntries((META.files||[]).map(f=>[f.id,f.size]));
 
 const st=Object.assign({scope:'all',repeat:false,speed:1,follow:true,mode:'audio',voice:''},lsGet(LS_PREF)||{});
@@ -448,6 +460,7 @@ function playTrack(i,t0,auto){
   if(t0==null) t0=0; if(auto==null) auto=true;
   const t=tracks[i]; if(!t) return;
   const prev=st.cur, changed=prev!==i; st.cur=i; if(changed) st.sent=-1;
+  if(NATIVE){ trackChanged(prev,changed); sendQueue(); NATIVE.play(i,t0); savePos(true); nativeKick(); return; }
   if(st.mode==='speech'){ trackChanged(prev,changed); speechStart(i,sentAt(t,t0),true); return; }
   if(needFresh||!audio){ needFresh=false; makeAudio(); }
   const tok=++loadTok; const ready=blobs.get(t.id);
@@ -523,20 +536,21 @@ function speakStep(tok){
 function speechStop(){ spk.tok++; spk.on=false; if(synth) synth.cancel(); setPlayingUI(false); savePos(true); }
 
 /* ---------- transport ---------- */
-function isPlaying(){ return st.mode==='audio'?(!audio.paused&&srcFor!=null)||loadTok&&document.body.classList.contains('loading'):spk.on; }
+function isPlaying(){ if(NATIVE) return !!(nstate.playing||nstate.loading); return st.mode==='audio'?(!audio.paused&&srcFor!=null)||loadTok&&document.body.classList.contains('loading'):spk.on; }
 function toggle(){
+  if(NATIVE&&st.cur>=0){ sendQueue(); NATIVE.toggle(); nativeKick(); return; }
   if(st.cur<0){ const p=lsGet(LS_POS); if(p&&byId[p.id]) playTrack(byId[p.id].idx,p.t); else playTrack(0,0); return; }
   if(st.mode==='audio'){
     if(audio.paused||srcFor==null){ if(needFresh||srcFor!==tracks[st.cur].id){ playTrack(st.cur,lastTime,true); return; } applyRate(); doPlay(false); }
     else audio.pause();
   } else { if(spk.on) speechStop(); else speechStart(st.cur,Math.max(st.sent,0),st.sent<0); }
 }
-function pause(){ if(st.mode==='audio'){ loadTok++; setLoading(false); try{ audio.pause(); }catch(e){} setPlayingUI(false); } else speechStop(); }
-function skip(d){ if(st.cur<0) return;
+function pause(){ if(NATIVE){ NATIVE.pause(); nativeKick(); return; } if(st.mode==='audio'){ loadTok++; setLoading(false); try{ audio.pause(); }catch(e){} setPlayingUI(false); } else speechStop(); }
+function skip(d){ if(st.cur<0) return; if(NATIVE){ NATIVE.seek(Math.max(0,(nstate.pos||0)+d)); nativeKick(); return; }
   if(st.mode==='audio'){ const dur=isFinite(audio.duration)&&audio.duration>0?audio.duration:tracks[st.cur].dur; seekTo(Math.max(0,Math.min(dur-0.5,(srcFor?audio.currentTime:lastTime)+d))); updateProgress(); }
   else { const t=tracks[st.cur]; const cur=t.sents[Math.max(st.sent,0)]; const k=sentAt(t,(cur?cur.t:0)+d); speechStart(st.cur,Math.max(0,k),false); } }
-function next(){ if(st.cur<0){ playTrack(0); return; } if(st.cur+1<tracks.length) playTrack(st.cur+1,0,true); }
-function prev(){ if(st.cur<0) return; const tcur=st.mode==='audio'?(srcFor?audio.currentTime:0):((tracks[st.cur].sents[st.sent]||{t:0}).t);
+function next(){ if(st.cur<0){ playTrack(0); return; } if(NATIVE){ NATIVE.next(); nativeKick(); return; } if(st.cur+1<tracks.length) playTrack(st.cur+1,0,true); }
+function prev(){ if(st.cur<0) return; if(NATIVE){ NATIVE.prev(); nativeKick(); return; } const tcur=st.mode==='audio'?(srcFor?audio.currentTime:0):((tracks[st.cur].sents[st.sent]||{t:0}).t);
   if(tcur>3||st.cur===0) playTrack(st.cur,0,true); else playTrack(st.cur-1,0,true); }
 
 /* ---------- UI updates ---------- */
@@ -552,15 +566,15 @@ function updateNow(){
   $('#nowPos').textContent=`${t.idx+1}/${tracks.length}`;
 }
 let dragging=false; const seek=$('#seek');
-function updateProgress(x){
+function updateProgress(x,dd){
   const t=tracks[st.cur]; if(!t) return;
-  const d=(st.mode==='audio'&&srcFor&&isFinite(audio.duration)&&audio.duration>0)?audio.duration:t.dur;
+  const d=dd>0?dd:((st.mode==='audio'&&srcFor&&isFinite(audio.duration)&&audio.duration>0)?audio.duration:t.dur);
   const c=x!=null?x:(st.mode==='audio'?(srcFor?audio.currentTime:lastTime):0);
   seek.max=String(d); if(!dragging) seek.value=String(c);
   $('#tCur').textContent=fmt(dragging?+seek.value:c); $('#tDur').textContent=fmt(d);
 }
 seek.addEventListener('input',()=>{ dragging=true; $('#tCur').textContent=fmt(+seek.value); });
-seek.addEventListener('change',()=>{ dragging=false; if(st.cur<0) return; const v=+seek.value;
+seek.addEventListener('change',()=>{ dragging=false; if(st.cur<0) return; const v=+seek.value; if(NATIVE){ NATIVE.seek(v); nativeKick(); return; }
   if(st.mode==='audio') seekTo(v); else speechStart(st.cur,Math.max(0,sentAt(tracks[st.cur],v)),false); });
 let lastUser=0; ['wheel','touchmove','keydown'].forEach(ev=>addEventListener(ev,e=>{ if(ev!=='keydown'||['ArrowUp','ArrowDown','PageUp','PageDown'].includes(e.key)) lastUser=Date.now(); },{passive:true}));
 const userActive=()=>Date.now()-lastUser<4000;
@@ -580,16 +594,16 @@ function setMeta(t){ if(!('mediaSession' in navigator)) return; try{
     artwork:[{src:new URL(ART[t.ch.no],location.href).href,sizes:'512x512',type:'image/png'}]}); }catch(e){} }
 function posState(){ if(!('mediaSession' in navigator)||!navigator.mediaSession.setPositionState||st.mode!=='audio'||!srcFor) return;
   const d=audio.duration; if(!isFinite(d)||d<=0) return; try{ navigator.mediaSession.setPositionState({duration:d,playbackRate:audio.playbackRate||1,position:Math.min(audio.currentTime,d)}); }catch(e){} }
-if('mediaSession' in navigator){ const H=(a,f)=>{ try{ navigator.mediaSession.setActionHandler(a,f); }catch(e){} };
+if('mediaSession' in navigator&&!NATIVE){ const H=(a,f)=>{ try{ navigator.mediaSession.setActionHandler(a,f); }catch(e){} };
   H('play',()=>{ if(!isPlaying()) toggle(); }); H('pause',pause); H('stop',pause);
   H('previoustrack',prev); H('nexttrack',next);
   H('seekto',d=>{ if(st.mode==='audio'&&d&&isFinite(d.seekTime)) seekTo(d.seekTime); }); }
 
 /* ---------- sleep timer ---------- */
 function updateSleepInfo(){ const el=$('#sleepInfo'); if(st.sleepAt){ const m=Math.max(0,Math.ceil((st.sleepAt-Date.now())/60000)); el.textContent=`あと${m}分`; } else el.textContent=st.sleepPt?'この項目の終わりで停止':''; }
-function checkSleep(){ if(st.sleepAt&&Date.now()>=st.sleepAt){ st.sleepAt=0; $('#sleepSel').value='0'; pause(); updateSleepInfo(); toast('スリープタイマーで停止しました'); } }
+function checkSleep(){ if(NATIVE) return; if(st.sleepAt&&Date.now()>=st.sleepAt){ st.sleepAt=0; $('#sleepSel').value='0'; pause(); updateSleepInfo(); toast('スリープタイマーで停止しました'); } }
 setInterval(()=>{ checkSleep(); if(!$('#sheet').hidden) updateSleepInfo(); },5000);
-$('#sleepSel').addEventListener('change',e=>{ const v=e.target.value; st.sleepAt=0; st.sleepPt=false; if(v==='pt') st.sleepPt=true; else if(+v>0) st.sleepAt=Date.now()+(+v)*60000; updateSleepInfo(); });
+$('#sleepSel').addEventListener('change',e=>{ const v=e.target.value; if(NATIVE){ try{ NATIVE.setSleep(v==='pt'?-1:(+v||0)); }catch(er){} } st.sleepAt=0; st.sleepPt=false; if(v==='pt') st.sleepPt=true; else if(+v>0) st.sleepAt=Date.now()+(+v)*60000; updateSleepInfo(); });
 
 /* ---------- offline save ---------- */
 const savedIds=new Set();
@@ -602,11 +616,12 @@ function renderSaved(){
   const b=$('#bSave'); if(!saving){ b.hidden=n===all; b.textContent=`残りをすべてダウンロード（約${Math.max(1,Math.round(left/1e6))}MB）`; }
   $('#saveNote').textContent=n===all?'全項目を保存済みです。電波がない場所でも再生できます。':'一度再生した項目は自動で端末に保存されます。全部保存しておくと、電波がない場所でも途切れません（Wi-Fi 推奨）。';
 }
-async function refreshSaved(){ if(!('caches' in window)){ $('#offPanel').hidden=true; return; }
+async function refreshSaved(){ if(NATIVE) return; if(!('caches' in window)){ $('#offPanel').hidden=true; return; }
   try{ const c=await caches.open(PACK); for(const t of tracks){ if(await c.match(t.url)){ savedIds.add(t.id); liOf(t.idx).classList.add('saved'); } } }catch(e){ $('#offPanel').hidden=true; return; }
   renderSaved(); }
 let saving=false;
 $('#bSave').addEventListener('click',async()=>{
+  if(NATIVE){ NATIVE.download(); nativeKick(); return; }
   if(saving) return; saving=true; const b=$('#bSave'); b.textContent='ダウンロード中…'; b.disabled=true;
   try{ try{ if(navigator.storage&&navigator.storage.persist) await navigator.storage.persist(); }catch(e){}
     const c=await caches.open(PACK);
@@ -619,6 +634,10 @@ $('#bSave').addEventListener('click',async()=>{
 /* ---------- install ---------- */
 let deferred=null;
 function showInstall(){
+  if(NATIVE){ $('#installPanel').hidden=true; return; }
+  if(ANDROID){ $('#installPanel').hidden=false; $('#installPanel .k').textContent='Android アプリ版'; $('#installApk').hidden=false;
+    const n=$('#installApkNote'); n.hidden=false; n.textContent='アプリを閉じても、アプリ一覧から消しても再生が続く Android 専用アプリです。ダウンロードしたファイルを開いてインストールしてください（初回は「この提供元のアプリを許可」をオンにします）。';
+    ['#installAndroid','#installIos','#installOther'].forEach(x=>$(x).hidden=true); return; }
   if(STANDALONE){ $('#installPanel').hidden=true; return; }
   $('#installPanel').hidden=false;
   $('#installAndroid').hidden=!deferred;
@@ -644,11 +663,11 @@ list.addEventListener('click',e=>{
     lastUser=0; if(st.mode==='speech'){ const prevI=st.cur; st.cur=i; trackChanged(prevI,prevI!==i); speechStart(i,k,false); } else playTrack(i,t.sents[k].t,true); }
 });
 list.addEventListener('keydown',e=>{ if((e.key==='Enter'||e.key===' ')&&e.target.classList.contains('s')){ e.preventDefault(); e.target.click(); } });
-function setScope(s){ st.scope=s; document.querySelectorAll('[data-scope]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.scope===s))); savePrefs(); prefetch(); }
+function setScope(s){ st.scope=s; document.querySelectorAll('[data-scope]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.scope===s))); savePrefs(); prefetch(); sendQueue(); }
 document.querySelectorAll('[data-scope]').forEach(b=>b.addEventListener('click',()=>{ setScope(b.dataset.scope); toast({all:'最後まで続けて再生します',chapter:'この章の終わりまで続けて再生します',point:'いまの項目だけを再生します'}[b.dataset.scope]+(st.repeat?'（繰り返し）':'')); }));
-function setRepeat(v){ st.repeat=v; $('#bRepeat').setAttribute('aria-pressed',String(v)); savePrefs(); prefetch(); }
+function setRepeat(v){ st.repeat=v; $('#bRepeat').setAttribute('aria-pressed',String(v)); savePrefs(); prefetch(); sendQueue(); }
 $('#bRepeat').addEventListener('click',()=>{ setRepeat(!st.repeat); toast(st.repeat?'繰り返し再生：オン':'繰り返し再生：オフ'); });
-function setSpeed(v){ st.speed=v; applyRate(); $('#bSpeed').textContent=v.toFixed(1)+'×'; document.querySelectorAll('[data-speed]').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.speed===v))); savePrefs(); posState();
+function setSpeed(v){ st.speed=v; applyRate(); if(NATIVE){ try{ NATIVE.setSpeed(v); }catch(e){} } $('#bSpeed').textContent=v.toFixed(1)+'×'; document.querySelectorAll('[data-speed]').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.speed===v))); savePrefs(); posState();
   if(st.mode==='speech'&&spk.on) speechStart(st.cur,Math.max(st.sent,0),false); }
 $('#speedSeg').innerHTML=SPEEDS.map(v=>`<button type="button" data-speed="${v}" aria-pressed="false">${v.toFixed(1)}×</button>`).join('');
 $('#speedSeg').addEventListener('click',e=>{ const b=e.target.closest('[data-speed]'); if(b) setSpeed(+b.dataset.speed); });
@@ -672,7 +691,7 @@ $('#sheet').addEventListener('click',e=>{ if(e.target.id==='sheet') $('#sheet').
 let forgetArmed=0;
 $('#bForget').addEventListener('click',async()=>{
   if(Date.now()-forgetArmed>4000){ forgetArmed=Date.now(); $('#forgetNote').textContent='もう一度押すと削除します。'; return; }
-  pause(); await kv('del','key'); lsDel(LS_PASS); try{ await caches.delete(PACK); }catch(e){} location.reload();
+  pause(); if(NATIVE){ try{ NATIVE.forget(); }catch(e){} } await kv('del','key'); lsDel(LS_PASS); try{ await caches.delete(PACK); }catch(e){} location.reload();
 });
 addEventListener('keydown',e=>{
   if(e.key==='Escape'&&!$('#sheet').hidden){ $('#sheet').hidden=true; return; }
@@ -684,7 +703,7 @@ let hiddenAt=0;
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='hidden'){ hiddenAt=Date.now(); savePos(true); return; }
   // returning to a paused app: start the next playback on a fresh audio element (works around iOS home-screen audio going silent after reopen)
-  if(st.mode==='audio'&&audio.paused&&hiddenAt&&Date.now()-hiddenAt>2000) needFresh=true;
+  if(!NATIVE&&st.mode==='audio'&&audio.paused&&hiddenAt&&Date.now()-hiddenAt>2000) needFresh=true;
   if(st.cur>=0&&st.sent>=0&&st.follow){ const el=textOf(st.cur).querySelector('.s.now'); if(el) scrollToEl(el,'center'); }
 });
 addEventListener('pageshow',e=>{ if(e.persisted) needFresh=true; });
@@ -692,13 +711,36 @@ addEventListener('pageshow',e=>{ if(e.persisted) needFresh=true; });
 /* ---------- init ---------- */
 setScope(st.scope); setRepeat(st.repeat); if(!SPEEDS.includes(st.speed)) st.speed=1; setSpeed(st.speed);
 $('#bFollow').setAttribute('aria-pressed',String(st.follow));
-if(!synth){ document.querySelector('[data-mode="speech"]').disabled=true; st.mode='audio'; }
+if(!synth||NATIVE){ document.querySelector('[data-mode="speech"]').disabled=true; st.mode='audio'; }
 document.querySelectorAll('[data-mode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===st.mode)));
 $('#voiceRow').hidden=st.mode!=='speech';
 const pos=lsGet(LS_POS);
 if(pos&&byId[pos.id]){ const t=byId[pos.id]; $('#resume').hidden=false; $('#resumeSub').textContent=` ${t.ch.label} P${t.no} ${t.title} ${fmt(pos.t)}`;
   $('#resume').addEventListener('click',()=>playTrack(t.idx,pos.t,true)); }
 refreshSaved();
+function renderNative(s){
+  const dl=s.dl||{}; const all=dl.total||tracks.length, n=dl.done||0;
+  if(dl.mask&&dl.mask!==lastMask){ lastMask=dl.mask; tracks.forEach((t,i)=>liOf(i).classList.toggle('saved',dl.mask[i]==='1')); }
+  $('#saveBar').style.width=(all?n/all*100:0)+'%'; $('#saveInfo').textContent=`${n}/${all} 項目を端末に保存済み`;
+  const b=$('#bSave'); b.hidden=n>=all||!!dl.running; b.disabled=false; b.textContent=dl.error?'ダウンロードを再開':'残りをすべてダウンロード';
+  $('#saveNote').textContent=!s.hasPass?'合言葉を入れ直すと、音声の保存が始まります。':dl.running?'音声を端末に保存しています…（Wi-Fi 推奨）':n>=all?'全項目を端末に保存済みです。電波がなくても、アプリを閉じても再生が続きます。':dl.error==='badpass'?'合言葉が違うため保存できませんでした。設定の「合言葉と保存した音声を削除」から入れ直してください。':dl.error==='net'?'保存が止まりました。通信状態を確認して「ダウンロードを再開」を押してください。':'音声を端末に保存してから再生します。';
+  st.sleepAt=s.sleepAt||0; st.sleepPt=!!s.sleepEnd;
+}
+function poll(){
+  if(!NATIVE) return; let s; try{ s=JSON.parse(NATIVE.getState()); }catch(e){ return; } if(!s||s.index===undefined) return;
+  nstate=s;
+  if(s.index>=0&&s.index<tracks.length&&s.index!==st.cur){
+    const prevI=st.cur; st.cur=s.index; st.sent=-1;
+    if(firstPoll&&!s.playing){ liOf(st.cur).classList.add('playing'); updateNow(); } else { trackChanged(prevI,true); sendQueue(); }
+  }
+  firstPoll=false;
+  if(st.cur>=0){ lastTime=s.pos||0; updateProgress(lastTime,s.dur); setSent(sentAt(tracks[st.cur],lastTime)); }
+  const on=!!(s.playing||s.loading); if(on!==st.playing) setPlayingUI(on);
+  document.body.classList.toggle('loading',!!s.loading);
+  renderNative(s);
+  if(s.playing) savePos(false);
+}
+if(NATIVE){ poll(); setInterval(()=>{ if(document.visibilityState==='visible') poll(); },300); document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') poll(); }); }
 const ph=()=>document.documentElement.style.setProperty('--player-h',$('#player').offsetHeight+'px'); ph(); addEventListener('resize',ph);
 }
 

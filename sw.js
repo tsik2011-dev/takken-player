@@ -2,7 +2,7 @@
    shell: network-first (3s timeout) with cache fallback, so updates arrive when online
    pack/*.bin audio: cache-first, saved as it is played or downloaded
    fonts: cache-first */
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL = 'tkp-shell-' + VERSION;
 const PACK = 'tkp-pack-v1';
 const FONTS = 'tkp-fonts';
@@ -48,6 +48,7 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin === location.origin) {
+    if (url.pathname.includes('/smart/') || url.pathname.endsWith('.apk')) return;
     if (/\/pack\/c\d+p\d+\.bin$/.test(url.pathname)) { e.respondWith(cacheFirst(req, PACK)); return; }
     if (url.pathname.includes('/pack/')) { e.respondWith(networkFirst(req, PACK)); return; }
     e.respondWith(networkFirst(req, SHELL));
